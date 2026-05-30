@@ -1,5 +1,5 @@
 import { createFileRoute, Outlet, useNavigate, useParams } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, useRef, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Send, Paperclip, Search, Plus, Lock } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
@@ -11,28 +11,16 @@ export const Route = createFileRoute("/_authenticated/chat")({
   component: ChatLayout,
 });
 
-type Conversation = {
-  id: string;
-  peer: {
-    id: string;
-    handle: string;
-    avatarUrl?: string | null;
-    online?: boolean;
-    lastSeen?: string | null;
-  };
-  lastMessage?: { body: string; createdAt: string } | null;
-};
-
 function ChatLayout() {
   const { token, user } = useAuth();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [presence, setPresence] = useState<Record<string, boolean>>({});
+  const [presence, setPresence] = useState({});
 
   useEffect(() => {
     if (!token) return;
-    api<{ conversations: Conversation[] }>("/conversations", { token })
+    api("/conversations", { token })
       .then((d) => setConversations(d.conversations ?? []))
       .catch(() => setConversations([]))
       .finally(() => setLoading(false));
@@ -41,10 +29,10 @@ function ChatLayout() {
   useEffect(() => {
     if (!token) return;
     const s = getSocket(token);
-    const onPresence = (e: { userId: string; online: boolean }) => {
+    const onPresence = (e) => {
       setPresence((p) => ({ ...p, [e.userId]: e.online }));
     };
-    const onNew = (msg: { conversationId: string; body: string; createdAt: string }) => {
+    const onNew = (msg) => {
       setConversations((prev) => {
         const found = prev.find((c) => c.id === msg.conversationId);
         if (!found) return prev;
@@ -64,7 +52,7 @@ function ChatLayout() {
     const handle = window.prompt("Handle to start a conversation with:");
     if (!handle) return;
     try {
-      const data = await api<{ conversation: Conversation }>("/conversations", {
+      const data = await api("/conversations", {
         method: "POST",
         token,
         body: JSON.stringify({ handle: handle.trim().toLowerCase() }),
@@ -145,8 +133,8 @@ function ChatLayout() {
   );
 }
 
-function ConversationRow({ conversation, online }: { conversation: Conversation; online: boolean }) {
-  const { conversationId } = useParams({ strict: false }) as { conversationId?: string };
+function ConversationRow({ conversation, online }) {
+  const { conversationId } = useParams({ strict: false });
   const active = conversationId === conversation.id;
   return (
     <a
@@ -176,7 +164,7 @@ function ConversationRow({ conversation, online }: { conversation: Conversation;
   );
 }
 
-function AvatarBadge({ user }: { user: { handle: string; avatarUrl?: string | null } }) {
+function AvatarBadge({ user }) {
   if (user.avatarUrl) {
     return <img src={user.avatarUrl} alt={user.handle} className="size-10 rounded-full object-cover" />;
   }
@@ -203,7 +191,7 @@ export function ChatEmptyState() {
   );
 }
 
-function formatShortTime(iso: string) {
+function formatShortTime(iso) {
   const d = new Date(iso);
   const now = new Date();
   if (d.toDateString() === now.toDateString()) {
@@ -212,4 +200,4 @@ function formatShortTime(iso: string) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export { ChatLayout };
+

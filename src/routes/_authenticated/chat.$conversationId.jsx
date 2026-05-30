@@ -1,27 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Lock, Send, Paperclip, Smile } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { messageSchema } from "@/lib/schemas";
-
-type Message = {
-  id: string;
-  conversationId: string;
-  senderId: string;
-  body: string;
-  createdAt: string;
-  status?: "sent" | "delivered" | "read";
-};
-
-type Peer = {
-  id: string;
-  handle: string;
-  avatarUrl?: string | null;
-  online?: boolean;
-  lastSeen?: string | null;
-};
 
 export const Route = createFileRoute("/_authenticated/chat/$conversationId")({
   component: ChatThread,
@@ -30,19 +13,19 @@ export const Route = createFileRoute("/_authenticated/chat/$conversationId")({
 function ChatThread() {
   const { conversationId } = Route.useParams();
   const { token, user } = useAuth();
-  const [peer, setPeer] = useState<Peer | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [peer, setPeer] = useState(null);
+  const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState("");
   const [peerTyping, setPeerTyping] = useState(false);
   const [peerOnline, setPeerOnline] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollRef = useRef(null);
+  const typingTimer = useRef(null);
 
   useEffect(() => {
     if (!token) return;
     setLoading(true);
-    api<{ peer: Peer; messages: Message[] }>(`/conversations/${conversationId}/messages`, { token })
+    api(`/conversations/${conversationId}/messages`, { token })
       .then((d) => {
         setPeer(d.peer);
         setMessages(d.messages);
@@ -59,22 +42,22 @@ function ChatThread() {
     const s = getSocket(token);
     s.emit("conversation:join", { conversationId });
 
-    const onNew = (m: Message) => {
+    const onNew = (m) => {
       if (m.conversationId !== conversationId) return;
       setMessages((prev) => [...prev, m]);
       if (m.senderId !== user?.id) {
         s.emit("message:read", { conversationId, messageId: m.id });
       }
     };
-    const onStatus = (e: { conversationId: string; messageId: string; status: Message["status"] }) => {
+    const onStatus = (e) => {
       if (e.conversationId !== conversationId) return;
       setMessages((prev) => prev.map((m) => (m.id === e.messageId ? { ...m, status: e.status } : m)));
     };
-    const onTyping = (e: { conversationId: string; userId: string; typing: boolean }) => {
+    const onTyping = (e) => {
       if (e.conversationId !== conversationId || e.userId === user?.id) return;
       setPeerTyping(e.typing);
     };
-    const onPresence = (e: { userId: string; online: boolean }) => {
+    const onPresence = (e) => {
       if (peer && e.userId === peer.id) setPeerOnline(e.online);
     };
 
@@ -96,37 +79,37 @@ function ChatThread() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, peerTyping]);
 
-  function notifyTyping(typing: boolean) {
+  function notifyTyping(typing) {
     if (!token) return;
     const s = getSocket(token);
     s.emit("typing", { conversationId, typing });
   }
 
-  function handleDraftChange(v: string) {
+  function handleDraftChange(v) {
     setDraft(v);
     notifyTyping(true);
     if (typingTimer.current) clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(() => notifyTyping(false), 1500);
   }
 
-  async function send(e: FormEvent) {
+  async function send(e) {
     e.preventDefault();
     const parsed = messageSchema.safeParse({ body: draft.trim() });
-    if (!parsed.success || !token) return;
+    if (!parsed.success || !token || !user) return;
     const body = parsed.data.body;
     setDraft("");
     notifyTyping(false);
-    const optimistic: Message = {
+    const optimistic = {
       id: `tmp-${Date.now()}`,
       conversationId,
-      senderId: user!.id,
+      senderId: user.id,
       body,
       createdAt: new Date().toISOString(),
       status: "sent",
     };
     setMessages((prev) => [...prev, optimistic]);
     try {
-      const data = await api<{ message: Message }>(`/conversations/${conversationId}/messages`, {
+      const data = await api(`/conversations/${conversationId}/messages`, {
         method: "POST",
         token,
         body: JSON.stringify({ body }),
@@ -269,17 +252,21 @@ function ChatThread() {
   );
 }
 
-function groupByDay(msgs: Message[]) {
-  const map = new Map<string, Message[]>();
+function groupByDay(msgs) {
+  const map = new Map();
   for (const m of msgs) {
     const day = formatDayLabel(m.createdAt);
-    if (!map.has(day)) map.set(day, []);
-    map.get(day)!.push(m);
+    const items = map.get(day);
+    if (!items) {
+      map.set(day, [m]);
+    } else {
+      items.push(m);
+    }
   }
   return Array.from(map.entries()).map(([day, items]) => ({ day, items }));
 }
 
-function formatDayLabel(iso: string) {
+function formatDayLabel(iso) {
   const d = new Date(iso);
   const now = new Date();
   const y = new Date(now);
@@ -289,6 +276,6 @@ function formatDayLabel(iso: string) {
   return d.toLocaleDateString([], { month: "long", day: "numeric" });
 }
 
-function formatShortTime(iso: string) {
+function formatShortTime(iso) {
   return new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }

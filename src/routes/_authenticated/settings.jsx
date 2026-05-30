@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useRef, useState, type ChangeEvent } from "react";
+import { useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
@@ -14,12 +14,12 @@ export const Route = createFileRoute("/_authenticated/settings")({
 function SettingsPage() {
   const { token, user, updateUser, logout } = useAuth();
   const navigate = useNavigate();
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef(null);
   const [bio, setBio] = useState(user?.bio ?? "");
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl ?? null);
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl ?? null);
   const [busy, setBusy] = useState(false);
 
-  function onAvatarFile(e: ChangeEvent<HTMLInputElement>) {
+  function onAvatarFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 200 * 1024) {
@@ -27,7 +27,7 @@ function SettingsPage() {
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => setAvatarUrl(reader.result as string);
+    reader.onload = () => setAvatarUrl(reader.result);
     reader.readAsDataURL(file);
   }
 
@@ -39,7 +39,7 @@ function SettingsPage() {
     }
     setBusy(true);
     try {
-      const data = await api<{ user: { bio?: string; avatarUrl?: string } }>("/me", {
+      const data = await api("/me", {
         method: "PATCH",
         token,
         body: JSON.stringify(parsed.data),

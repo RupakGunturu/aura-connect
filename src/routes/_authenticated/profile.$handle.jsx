@@ -4,15 +4,6 @@ import { Lock } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 
-type Profile = {
-  id: string;
-  handle: string;
-  bio?: string | null;
-  avatarUrl?: string | null;
-  online?: boolean;
-  lastSeen?: string | null;
-};
-
 export const Route = createFileRoute("/_authenticated/profile/$handle")({
   component: ProfilePage,
 });
@@ -20,14 +11,14 @@ export const Route = createFileRoute("/_authenticated/profile/$handle")({
 function ProfilePage() {
   const { handle } = Route.useParams();
   const { token, user } = useAuth();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
-    api<{ user: Profile }>(`/users/${handle}`, { token })
+    api(`/users/${handle}`, { token })
       .then((d) => setProfile(d.user))
       .catch((e) => setError(e instanceof Error ? e.message : "Not found"))
       .finally(() => setLoading(false));
