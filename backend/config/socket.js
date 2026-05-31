@@ -35,6 +35,7 @@ export function createSocketServer(server) {
   });
 
   io.on('connection', (socket) => {
+    socket.join(`user:${socket.user.id}`);
     initializeChatSocket(socket);
     initializePresenceSocket(socket);
     initializeCallSocket(socket);

@@ -8,8 +8,11 @@ export async function connectDatabase() {
   mongoose.connection.on('disconnected', () => logger.warn('MongoDB disconnected'));
   mongoose.connection.on('error', (error) => logger.error('MongoDB error', error));
 
-  await mongoose.connect(env.mongoUri, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
+  try {
+    await mongoose.connect(env.mongoUri);
+    logger.info('MongoDB connection successful');
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to connect to MongoDB');
+    throw error;
+  }
 }

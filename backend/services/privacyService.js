@@ -1,14 +1,15 @@
 import { User } from '../models/User.js';
 
+const ALLOWED_SETTINGS = ['privacyMode', 'allowUnknownMessages', 'allowVoiceCalls', 'allowVideoCalls', 'showOnlineStatus'];
+
 export async function updatePrivacySettings(userId, settings) {
-  const allowed = ['privacyMode', 'allowUnknownMessages'];
   const payload = {};
-  for (const key of allowed) {
-    if (settings[key] !== undefined) {
-      payload[`settings.${key}`] = settings[key];
+  for (const [key, value] of Object.entries(settings)) {
+    if (ALLOWED_SETTINGS.includes(key)) {
+      payload[`settings.${key}`] = value;
     }
   }
-  return User.findByIdAndUpdate(userId, payload, { new: true }).select('-passwordHash -refreshToken');
+  return User.findByIdAndUpdate(userId, payload, { new: true }).select('-passwordHash');
 }
 
 export async function getPrivacySettings(userId) {

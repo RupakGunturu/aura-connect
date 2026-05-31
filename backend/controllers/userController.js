@@ -1,4 +1,4 @@
-import { getUserProfile, updateUserProfile, updateUserSettings, searchUsers, findUserByHandle } from '../services/userService.js';
+import { getUserProfile, updateUserProfile, updateUserSettings, searchUsers, findUserByHandle, blockUser, unblockUser, listBlockedUsers } from '../services/userService.js';
 import { requireFields } from '../utils/validation.js';
 
 export async function getProfile(req, res, next) {
@@ -53,6 +53,33 @@ export async function queryUsers(req, res, next) {
       throw error;
     }
     const users = await searchUsers(q);
+    res.status(200).json({ users });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function blockUserHandler(req, res, next) {
+  try {
+    const profile = await blockUser(req.user.id, req.params.userId);
+    res.status(200).json({ profile });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function unblockUserHandler(req, res, next) {
+  try {
+    const profile = await unblockUser(req.user.id, req.params.userId);
+    res.status(200).json({ profile });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function listBlockedUsersHandler(req, res, next) {
+  try {
+    const users = await listBlockedUsers(req.user.id);
     res.status(200).json({ users });
   } catch (error) {
     next(error);

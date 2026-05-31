@@ -1,95 +1,100 @@
-/* eslint-disable */
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { CallProvider } from "@/contexts/CallContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AppShell } from "@/components/layout/AppShell";
+import IncomingCallModal from "@/components/calls/IncomingCallModal";
+import ActiveCallOverlay from "@/components/calls/ActiveCallOverlay";
+import Chat from "./pages/Chat";
+import Onboarding from "./pages/Onboarding";
+import Profile from "./pages/Profile";
+import Calls from "./pages/Calls";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import NotFound from "./pages/NotFound";
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as SignupRouteImport } from './routes/signup'
-import { Route as OnboardingRouteImport } from './routes/onboarding'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
-import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
-import { Route as AuthenticatedChatIndexRouteImport } from './routes/_authenticated/chat.index'
-import { Route as AuthenticatedProfileHandleRouteImport } from './routes/_authenticated/profile.$handle'
-import { Route as AuthenticatedChatConversationIdRouteImport } from './routes/_authenticated/chat.$conversationId'
+const queryClient = new QueryClient();
 
-const SignupRoute = SignupRouteImport.update({
-  id: '/signup',
-  path: '/signup',
-  getParentRoute: () => rootRouteImport,
-})
-const OnboardingRoute = OnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
-  getParentRoute: () => rootRouteImport,
-})
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-})
-const AuthenticatedRoute = AuthenticatedRouteImport.update({
-  id: '/_authenticated',
-  getParentRoute: () => rootRouteImport,
-})
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-})
-const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => AuthenticatedRoute,
-})
-const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
-  id: '/chat',
-  path: '/chat',
-  getParentRoute: () => AuthenticatedRoute,
-})
-const AuthenticatedChatIndexRoute = AuthenticatedChatIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthenticatedChatRoute,
-})
-const AuthenticatedProfileHandleRoute =
-  AuthenticatedProfileHandleRouteImport.update({
-    id: '/profile/$handle',
-    path: '/profile/$handle',
-    getParentRoute: () => AuthenticatedRoute,
-  })
-const AuthenticatedChatConversationIdRoute =
-  AuthenticatedChatConversationIdRouteImport.update({
-    id: '/$conversationId',
-    path: '/$conversationId',
-    getParentRoute: () => AuthenticatedChatRoute,
-  })
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>
+      <CallProvider>
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="light"
+        />
+        <BrowserRouter future={{ v7_startTransition: true }}>
+          <IncomingCallModal />
+          <ActiveCallOverlay />
+          <Routes>
+            <Route path="/" element={<Navigate to="/chat" replace />} />
+            <Route
+              path="/chat"
+              element={
+                <ProtectedRoute>
+                  <AppShell>
+                    <Chat />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chat/:conversationId"
+              element={
+                <ProtectedRoute>
+                  <AppShell>
+                    <Chat />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/calls"
+              element={
+                <ProtectedRoute>
+                  <AppShell>
+                    <Calls />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile/:handle"
+              element={
+                <ProtectedRoute>
+                  <AppShell>
+                    <Profile />
+                  </AppShell>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/onboarding"
+              element={
+                <ProtectedRoute requireOnboarding={false}>
+                  <Onboarding />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </CallProvider>
+    </AuthProvider>
+  </QueryClientProvider>
+);
 
-const AuthenticatedChatRouteChildren = {
-  AuthenticatedChatConversationIdRoute: AuthenticatedChatConversationIdRoute,
-  AuthenticatedChatIndexRoute: AuthenticatedChatIndexRoute,
-}
-
-const AuthenticatedChatRouteWithChildren =
-  AuthenticatedChatRoute._addFileChildren(AuthenticatedChatRouteChildren)
-
-const AuthenticatedRouteChildren = {
-  AuthenticatedChatRoute: AuthenticatedChatRouteWithChildren,
-  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
-  AuthenticatedProfileHandleRoute: AuthenticatedProfileHandleRoute,
-}
-
-const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
-  AuthenticatedRouteChildren,
-)
-
-const rootRouteChildren = {
-  IndexRoute: IndexRoute,
-  AuthenticatedRoute: AuthenticatedRouteWithChildren,
-  LoginRoute: LoginRoute,
-  OnboardingRoute: OnboardingRoute,
-  SignupRoute: SignupRoute,
-}
-
-export const routeTree = rootRouteImport
-  ._addFileChildren(rootRouteChildren)
-
+export default App;

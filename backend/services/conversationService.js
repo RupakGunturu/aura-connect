@@ -2,12 +2,15 @@ import { Conversation } from '../models/Conversation.js';
 
 export async function getUserConversations(userId) {
   return Conversation.find({ participants: userId })
+    .populate('participants', 'email profile')
     .sort({ updatedAt: -1 })
     .lean();
 }
 
 export async function getConversationById(conversationId) {
-  return Conversation.findById(conversationId).lean();
+  return Conversation.findById(conversationId)
+    .populate('participants', 'email profile')
+    .lean();
 }
 
 export async function createConversation(participants, title, isPrivate = true) {

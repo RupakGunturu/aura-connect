@@ -1,4 +1,4 @@
-import { createCallSession, getCallSession, updateCallSession, closeCallSession } from '../services/callService.js';
+import { createCallSession, getCallSession, updateCallSession, closeCallSession, listUserCallSessions } from '../services/callService.js';
 import { requireFields } from '../utils/validation.js';
 
 export async function createCall(req, res, next) {
@@ -30,6 +30,15 @@ export async function updateCall(req, res, next) {
     const update = req.body;
     const session = await updateCallSession(req.params.callId, update);
     res.status(200).json({ session });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function listCalls(req, res, next) {
+  try {
+    const sessions = await listUserCallSessions(req.user.id);
+    res.status(200).json({ sessions });
   } catch (error) {
     next(error);
   }

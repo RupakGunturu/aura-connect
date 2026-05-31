@@ -4,9 +4,10 @@ const messageSchema = new mongoose.Schema(
   {
     conversationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', required: true },
     senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    encryptedPayload: { type: String, required: true },
-    iv: { type: String, required: true },
-    authTag: { type: String, required: true },
+    body: { type: String, trim: true },
+    encryptedPayload: { type: String },
+    iv: { type: String },
+    authTag: { type: String },
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
     delivered: { type: Boolean, default: false },
     read: { type: Boolean, default: false },

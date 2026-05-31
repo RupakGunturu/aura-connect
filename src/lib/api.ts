@@ -12,19 +12,42 @@ export class ApiError extends Error {
   }
 }
 
+let refreshHandler: (() => Promise<string>) | null = null;
+let refreshing: Promise<string> | null = null;
+
+export function setRefreshHandler(h: () => Promise<string>) {
+  refreshHandler = h;
+}
+
 export async function api<T = unknown>(
   path: string,
   opts: RequestInit & { token?: string | null } = {},
 ): Promise<T> {
   const { token, headers, ...rest } = opts;
-  const res = await fetch(`${API_URL}${path}`, {
-    ...rest,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-  });
+  const doFetch = (t: string | null | undefined) =>
+    fetch(`${API_URL}${path}`, {
+      ...rest,
+      headers: {
+        "Content-Type": "application/json",
+        ...(t ? { Authorization: `Bearer ${t}` } : {}),
+        ...headers,
+      },
+    });
+
+  let res = await doFetch(token);
+
+  if (res.status === 401 && refreshHandler) {
+    if (!refreshing) {
+      refreshing = refreshHandler().finally(() => { refreshing = null; });
+    }
+    try {
+      const newToken = await refreshing;
+      res = await doFetch(newToken);
+    } catch {
+      // refresh failed — throw original error
+    }
+  }
+
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {

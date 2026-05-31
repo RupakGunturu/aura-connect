@@ -11,13 +11,14 @@ export async function requireAuth(req, res, next) {
 
   try {
     const payload = verifyAccessToken(authHeader[1]);
-    const user = await User.findById(payload.id).select('-passwordHash -refreshToken');
+    const user = await User.findById(payload.id).select('-passwordHash -sessions');
     if (!user) {
       const error = new Error('User not found');
       error.status = 401;
       throw error;
     }
     req.user = user;
+    req.tokenPayload = payload;
     next();
   } catch (err) {
     err.status = err.status || 401;

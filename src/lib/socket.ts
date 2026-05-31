@@ -19,6 +19,10 @@ export function getSocket(token: string): Socket {
   return socket;
 }
 
+export function connectSocket(token: string): Socket {
+  return getSocket(token);
+}
+
 export function disconnectSocket() {
   if (socket) {
     socket.disconnect();
@@ -26,3 +30,5 @@ export function disconnectSocket() {
     currentToken = null;
   }
 }
+
+export { socket };

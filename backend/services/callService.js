@@ -16,3 +16,11 @@ export async function updateCallSession(sessionId, update) {
 export async function closeCallSession(sessionId) {
   return CallSession.findByIdAndUpdate(sessionId, { status: 'ended' }, { new: true }).lean();
 }
+
+export async function listUserCallSessions(userId) {
+  return CallSession.find({ participants: userId })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .populate('participants', 'email profile')
+    .lean();
+}

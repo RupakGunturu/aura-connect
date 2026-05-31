@@ -12,15 +12,20 @@ export async function listMessages(req, res, next) {
 
 export async function sendMessage(req, res, next) {
   try {
-    requireFields(req.body, ['conversationId', 'encryptedPayload', 'iv', 'authTag']);
-    const message = await createMessage({
+    const payload = {
       conversationId: req.body.conversationId,
       senderId: req.user.id,
-      encryptedPayload: req.body.encryptedPayload,
-      iv: req.body.iv,
-      authTag: req.body.authTag,
       metadata: req.body.metadata || {},
-    });
+    };
+    if (req.body.body) {
+      payload.body = req.body.body;
+    } else {
+      requireFields(req.body, ['encryptedPayload', 'iv', 'authTag']);
+      payload.encryptedPayload = req.body.encryptedPayload;
+      payload.iv = req.body.iv;
+      payload.authTag = req.body.authTag;
+    }
+    const message = await createMessage(payload);
     res.status(201).json({ message });
   } catch (error) {
     next(error);
