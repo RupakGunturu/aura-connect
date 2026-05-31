@@ -2,8 +2,22 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
-  User, Calendar, Pencil, Check, X, Shield, Key, Smartphone,
-  Ban, Phone, Video, Mail, LogOut, Trash2, Search, Loader,
+  User,
+  Calendar,
+  Pencil,
+  Check,
+  X,
+  Shield,
+  Key,
+  Smartphone,
+  Ban,
+  Phone,
+  Video,
+  Mail,
+  LogOut,
+  Trash2,
+  Search,
+  Loader,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -55,7 +69,9 @@ function EditableField({ label, value, onSave, type = "text", textarea, placehol
     return (
       <div className="group flex items-center justify-between rounded-xl border border-transparent px-4 py-3 hover:border-border">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            {label}
+          </p>
           <p className="mt-0.5 truncate text-sm">{value || placeholder || "—"}</p>
         </div>
         <button
@@ -70,7 +86,9 @@ function EditableField({ label, value, onSave, type = "text", textarea, placehol
 
   return (
     <div className="rounded-xl border border-border bg-background/50 px-4 py-3">
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+        {label}
+      </p>
       {textarea ? (
         <textarea
           value={draft}
@@ -188,7 +206,11 @@ export default function Profile() {
   const [blockSearch, setBlockSearch] = useState("");
   const [blockResults, setBlockResults] = useState([]);
 
-  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
 
@@ -257,7 +279,9 @@ export default function Profile() {
       token,
     });
     updateUser({ profile: data.profile.profile });
-    toast.success(`${field === "name" ? "Name" : field === "handle" ? "Handle" : field === "bio" ? "Bio" : "Avatar"} updated`);
+    toast.success(
+      `${field === "name" ? "Name" : field === "handle" ? "Handle" : field === "bio" ? "Bio" : "Avatar"} updated`,
+    );
   }
 
   async function saveSetting(key, value) {
@@ -305,7 +329,10 @@ export default function Profile() {
     try {
       await api("/auth/password", {
         method: "PATCH",
-        body: JSON.stringify({ currentPassword: passwordForm.currentPassword, newPassword: passwordForm.newPassword }),
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
         token,
       });
       toast.success("Password changed");
@@ -470,9 +497,25 @@ export default function Profile() {
         <>
           {/* Profile Section */}
           <Section title="Profile" icon={User}>
-            <EditableField label="Name" value={display.profile?.name ?? ""} onSave={(v) => saveProfile("name", v)} placeholder="Your name" />
-            <EditableField label="Username" value={display.profile?.handle ?? ""} onSave={(v) => saveProfile("handle", v)} placeholder="your_handle" />
-            <EditableField label="Bio" value={display.profile?.bio ?? ""} onSave={(v) => saveProfile("bio", v)} textarea placeholder="Tell the world about yourself..." />
+            <EditableField
+              label="Name"
+              value={display.profile?.name ?? ""}
+              onSave={(v) => saveProfile("name", v)}
+              placeholder="Your name"
+            />
+            <EditableField
+              label="Username"
+              value={display.profile?.handle ?? ""}
+              onSave={(v) => saveProfile("handle", v)}
+              placeholder="your_handle"
+            />
+            <EditableField
+              label="Bio"
+              value={display.profile?.bio ?? ""}
+              onSave={(v) => saveProfile("bio", v)}
+              textarea
+              placeholder="Tell the world about yourself..."
+            />
           </Section>
 
           {/* Privacy & Security */}
@@ -480,12 +523,16 @@ export default function Profile() {
             <div className="rounded-xl border border-border bg-background/50 px-4 py-3">
               {showPasswordForm ? (
                 <form onSubmit={handlePasswordChange} className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Change Password</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Change Password
+                  </p>
                   <input
                     type="password"
                     placeholder="Current password"
                     value={passwordForm.currentPassword}
-                    onChange={(e) => setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))}
+                    onChange={(e) =>
+                      setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))
+                    }
                     className="w-full rounded-lg border border-border bg-background/50 px-3 py-2 text-sm outline-none focus:border-brand"
                     required
                   />
@@ -493,7 +540,9 @@ export default function Profile() {
                     type="password"
                     placeholder="New password"
                     value={passwordForm.newPassword}
-                    onChange={(e) => setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))}
+                    onChange={(e) =>
+                      setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))
+                    }
                     className="w-full rounded-lg border border-border bg-background/50 px-3 py-2 text-sm outline-none focus:border-brand"
                     required
                     minLength={8}
@@ -502,14 +551,23 @@ export default function Profile() {
                     type="password"
                     placeholder="Confirm new password"
                     value={passwordForm.confirmPassword}
-                    onChange={(e) => setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))}
+                    onChange={(e) =>
+                      setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))
+                    }
                     className="w-full rounded-lg border border-border bg-background/50 px-3 py-2 text-sm outline-none focus:border-brand"
                     required
                   />
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => { setShowPasswordForm(false); setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" }); }}
+                      onClick={() => {
+                        setShowPasswordForm(false);
+                        setPasswordForm({
+                          currentPassword: "",
+                          newPassword: "",
+                          confirmPassword: "",
+                        });
+                      }}
                       className="flex-1 rounded-xl border border-border py-2 text-xs font-semibold hover:bg-card/60"
                     >
                       Cancel
@@ -536,7 +594,9 @@ export default function Profile() {
 
             {/* Active Sessions */}
             <div className="rounded-xl border border-border bg-background/50 px-4 py-3">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Active Sessions</p>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Active Sessions
+              </p>
               {sessions.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No active sessions</p>
               ) : (
@@ -546,7 +606,9 @@ export default function Profile() {
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <Smartphone className="size-4 shrink-0 text-muted-foreground" />
                         <div className="min-w-0">
-                          <p className="truncate text-xs font-medium">{s.deviceInfo || "Unknown device"}</p>
+                          <p className="truncate text-xs font-medium">
+                            {s.deviceInfo || "Unknown device"}
+                          </p>
                           <p className="text-[10px] text-muted-foreground">
                             {new Date(s.lastActiveAt).toLocaleDateString()}
                           </p>
@@ -566,7 +628,9 @@ export default function Profile() {
 
             {/* Blocked Users */}
             <div className="rounded-xl border border-border bg-background/50 px-4 py-3">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Blocked Users</p>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Blocked Users
+              </p>
               <div className="relative mb-2">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
@@ -596,7 +660,10 @@ export default function Profile() {
               ) : (
                 <div className="space-y-1">
                   {blockedUsers.map((u) => (
-                    <div key={u._id} className="flex items-center justify-between rounded-lg px-2 py-1.5">
+                    <div
+                      key={u._id}
+                      className="flex items-center justify-between rounded-lg px-2 py-1.5"
+                    >
                       <span className="text-xs">@{u.profile?.handle ?? "unknown"}</span>
                       <button
                         onClick={() => unblock(u._id)}
@@ -636,7 +703,9 @@ export default function Profile() {
           {/* Account */}
           <Section title="Account" icon={Mail}>
             <div className="rounded-xl border border-border bg-background/50 px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Email</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Email
+              </p>
               <p className="mt-0.5 text-sm">{display.email}</p>
             </div>
             <button

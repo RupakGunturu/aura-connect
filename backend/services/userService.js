@@ -4,6 +4,15 @@ export async function getUserProfile(userId) {
   return User.findById(userId).select('-passwordHash').lean();
 }
 
+export async function updateUserPublicKey(userId, publicKey) {
+  return User.findByIdAndUpdate(userId, { publicKey }, { new: true }).select('-passwordHash');
+}
+
+export async function getUserPublicKey(userId) {
+  const user = await User.findById(userId).select('publicKey').lean();
+  return user?.publicKey || '';
+}
+
 export async function updateUserProfile(userId, profileChanges) {
   const allowed = ['name', 'handle', 'bio', 'avatarUrl'];
   const update = {};

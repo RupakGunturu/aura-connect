@@ -1,4 +1,5 @@
 import { createConversation, getConversationById, getUserConversations, addParticipant, removeParticipant } from '../services/conversationService.js';
+import { markConversationRead } from '../services/messageService.js';
 import { requireFields } from '../utils/validation.js';
 
 export async function listConversations(req, res, next) {
@@ -39,6 +40,15 @@ export async function joinConversation(req, res, next) {
     requireFields(req.body, ['participantId']);
     const conversation = await addParticipant(req.params.conversationId, req.body.participantId);
     res.status(200).json({ conversation });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function markAsRead(req, res, next) {
+  try {
+    await markConversationRead(req.params.conversationId, req.user.id);
+    res.status(200).json({ success: true });
   } catch (error) {
     next(error);
   }

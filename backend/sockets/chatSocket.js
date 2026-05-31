@@ -1,4 +1,4 @@
-export function initializeChatSocket(socket) {
+export function initializeChatSocket(socket, io) {
   const userId = socket.user?.id;
   if (userId) {
     socket.join(`user:${userId}`);
@@ -12,9 +12,11 @@ export function initializeChatSocket(socket) {
     socket.leave(`conversation:${conversationId}`);
   });
 
-  socket.on('sendMessage', (payload) => {
-    const room = `conversation:${payload.conversationId}`;
-    socket.to(room).emit('messageReceived', { ...payload, senderId: userId });
+  socket.on('markRead', ({ conversationId }) => {
+    socket.to(`conversation:${conversationId}`).emit('conversationRead', {
+      conversationId,
+      userId,
+    });
   });
 
   socket.on('disconnect', () => {

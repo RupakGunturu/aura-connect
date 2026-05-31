@@ -1,8 +1,7 @@
 export const API_URL =
   (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000";
 
-export const SOCKET_URL =
-  (import.meta.env.VITE_SOCKET_URL as string | undefined) ?? API_URL;
+export const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL as string | undefined) ?? API_URL;
 
 export class ApiError extends Error {
   status: number;
@@ -38,7 +37,9 @@ export async function api<T = unknown>(
 
   if (res.status === 401 && refreshHandler) {
     if (!refreshing) {
-      refreshing = refreshHandler().finally(() => { refreshing = null; });
+      refreshing = refreshHandler().finally(() => {
+        refreshing = null;
+      });
     }
     try {
       const newToken = await refreshing;

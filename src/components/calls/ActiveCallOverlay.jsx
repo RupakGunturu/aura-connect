@@ -1,7 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import {
-  PhoneOff, Mic, MicOff, Video, VideoOff, Maximize2, Minimize2,
-} from "lucide-react";
+import { PhoneOff, Mic, MicOff, Video, VideoOff, Maximize2, Minimize2 } from "lucide-react";
 import { useCall } from "@/contexts/CallContext";
 
 export default function ActiveCallOverlay() {
@@ -29,21 +27,27 @@ export default function ActiveCallOverlay() {
     if (!activeCall?.startTime) return;
     const id = setInterval(() => {
       const sec = Math.floor((Date.now() - activeCall.startTime) / 1000);
-      setElapsed(`${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`);
+      setElapsed(
+        `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`,
+      );
     }, 1000);
     return () => clearInterval(id);
   }, [activeCall?.startTime]);
 
   const toggleMute = useCallback(() => {
     if (localStream.current) {
-      localStream.current.getAudioTracks().forEach((t) => { t.enabled = muted; });
+      localStream.current.getAudioTracks().forEach((t) => {
+        t.enabled = muted;
+      });
       setMuted((v) => !v);
     }
   }, [muted]);
 
   const toggleCam = useCallback(() => {
     if (localStream.current) {
-      localStream.current.getVideoTracks().forEach((t) => { t.enabled = camOff; });
+      localStream.current.getVideoTracks().forEach((t) => {
+        t.enabled = camOff;
+      });
       setCamOff((v) => !v);
     }
   }, [camOff]);
@@ -73,14 +77,20 @@ export default function ActiveCallOverlay() {
           </div>
           <p className="text-xl font-semibold text-white">{activeCall.peerName}</p>
           <p className="mt-1 text-sm text-white/60">
-            {isConnected ? elapsed : activeCall.status === "calling" ? "Calling..." : "Connecting..."}
+            {isConnected
+              ? elapsed
+              : activeCall.status === "calling"
+                ? "Calling..."
+                : "Connecting..."}
           </p>
         </div>
       )}
 
       {/* Local video (PiP) */}
       {isVideo && (
-        <div className={`absolute ${pip ? "inset-0" : "right-4 top-4"} z-10 overflow-hidden rounded-2xl ring-2 ring-white/20 transition-all ${pip ? "" : "size-32"}`}>
+        <div
+          className={`absolute ${pip ? "inset-0" : "right-4 top-4"} z-10 overflow-hidden rounded-2xl ring-2 ring-white/20 transition-all ${pip ? "" : "size-32"}`}
+        >
           <video
             ref={localVideoRef}
             autoPlay

@@ -91,7 +91,9 @@ export default function Onboarding() {
                 rows={3}
                 className="w-full resize-none rounded-xl border border-border bg-background/50 px-4 py-3 text-sm outline-none transition-colors focus:border-brand"
               />
-              <span className="mt-1 block text-right text-[10px] text-muted-foreground">{bio.length}/280</span>
+              <span className="mt-1 block text-right text-[10px] text-muted-foreground">
+                {bio.length}/280
+              </span>
             </label>
 
             <label className="block">

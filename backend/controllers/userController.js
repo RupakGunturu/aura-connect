@@ -1,4 +1,4 @@
-import { getUserProfile, updateUserProfile, updateUserSettings, searchUsers, findUserByHandle, blockUser, unblockUser, listBlockedUsers } from '../services/userService.js';
+import { getUserProfile, updateUserProfile, updateUserSettings, searchUsers, findUserByHandle, blockUser, unblockUser, listBlockedUsers, updateUserPublicKey, getUserPublicKey } from '../services/userService.js';
 import { requireFields } from '../utils/validation.js';
 
 export async function getProfile(req, res, next) {
@@ -15,6 +15,29 @@ export async function updateProfile(req, res, next) {
     requireFields(req.body, ['profile']);
     const profile = await updateUserProfile(req.user.id, req.body.profile);
     res.status(200).json({ profile });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updatePublicKey(req, res, next) {
+  try {
+    const { publicKey } = req.body;
+    if (!publicKey || typeof publicKey !== 'string') {
+      return res.status(400).json({ error: 'publicKey is required' });
+    }
+    const user = await updateUserPublicKey(req.user.id, publicKey);
+    res.status(200).json({ user });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getPublicKey(req, res, next) {
+  try {
+    const { userId } = req.params;
+    const publicKey = await getUserPublicKey(userId);
+    res.status(200).json({ publicKey });
   } catch (error) {
     next(error);
   }

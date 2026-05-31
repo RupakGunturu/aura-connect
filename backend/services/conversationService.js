@@ -3,6 +3,7 @@ import { Conversation } from '../models/Conversation.js';
 export async function getUserConversations(userId) {
   return Conversation.find({ participants: userId })
     .populate('participants', 'email profile')
+    .populate('lastMessage')
     .sort({ updatedAt: -1 })
     .lean();
 }
@@ -10,6 +11,7 @@ export async function getUserConversations(userId) {
 export async function getConversationById(conversationId) {
   return Conversation.findById(conversationId)
     .populate('participants', 'email profile')
+    .populate('lastMessage')
     .lean();
 }
 

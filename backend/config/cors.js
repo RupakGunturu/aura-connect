@@ -8,7 +8,7 @@ export const corsOptions = {
     }
     callback(new Error('CORS policy violation: origin not allowed')); 
   },
-  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],
   credentials: true,
   exposedHeaders: ['Authorization'],
 };

@@ -17,15 +17,19 @@ export async function sendMessage(req, res, next) {
       senderId: req.user.id,
       metadata: req.body.metadata || {},
     };
-    if (req.body.body) {
-      payload.body = req.body.body;
-    } else {
-      requireFields(req.body, ['encryptedPayload', 'iv', 'authTag']);
+    payload.body = req.body.body || '';
+    if (req.body.encryptedPayload) {
       payload.encryptedPayload = req.body.encryptedPayload;
       payload.iv = req.body.iv;
       payload.authTag = req.body.authTag;
     }
     const message = await createMessage(payload);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`conversation:${message.conversationId}`).emit('message', message);
+    }
+
     res.status(201).json({ message });
   } catch (error) {
     next(error);

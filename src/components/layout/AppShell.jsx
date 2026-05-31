@@ -30,7 +30,10 @@ export function AppShell({ children }) {
       <div className="ambient-glow pointer-events-none absolute inset-0" />
       {/* Desktop sidebar */}
       <aside className="relative z-10 hidden w-16 shrink-0 flex-col items-center gap-3 border-r border-border bg-background/40 py-6 backdrop-blur-md md:flex">
-        <Link to="/chat" className="flex size-10 items-center justify-center rounded-xl bg-brand/15 ring-1 ring-brand/40">
+        <Link
+          to="/chat"
+          className="flex size-10 items-center justify-center rounded-xl bg-brand/15 ring-1 ring-brand/40"
+        >
           <div className="size-4 rounded-sm bg-brand" />
         </Link>
         <div className="my-2 h-px w-8 bg-border" />

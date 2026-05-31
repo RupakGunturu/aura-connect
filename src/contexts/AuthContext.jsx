@@ -31,22 +31,31 @@ export function AuthProvider({ children }) {
     setRefreshToken(rt);
     setUser(u);
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ token: t, refreshToken: rt, user: u }));
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ token: t, refreshToken: rt, user: u }),
+      );
     }
   }, []);
 
-  const setSession = useCallback((accessToken, refreshTk, nextUser) => {
-    save(accessToken, refreshTk, nextUser);
-  }, [save]);
+  const setSession = useCallback(
+    (accessToken, refreshTk, nextUser) => {
+      save(accessToken, refreshTk, nextUser);
+    },
+    [save],
+  );
 
-  const updateUser = useCallback((patch) => {
-    setUser((prev) => {
-      if (!prev) return prev;
-      const next = { ...prev, ...patch };
-      save(token, refreshToken, next);
-      return next;
-    });
-  }, [token, refreshToken, save]);
+  const updateUser = useCallback(
+    (patch) => {
+      setUser((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev, ...patch };
+        save(token, refreshToken, next);
+        return next;
+      });
+    },
+    [token, refreshToken, save],
+  );
 
   const refreshAuth = useCallback(async () => {
     if (!refreshToken) throw new Error("No refresh token");

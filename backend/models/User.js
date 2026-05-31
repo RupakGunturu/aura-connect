@@ -30,6 +30,7 @@ const userSchema = new mongoose.Schema(
     },
     sessions: { type: [sessionSchema], default: [] },
     blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    publicKey: { type: String, default: '' },
   },
   { timestamps: true },
 );

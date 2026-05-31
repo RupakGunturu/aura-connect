@@ -13,6 +13,7 @@ async function startServer() {
 
     const server = http.createServer(app);
     const io = createSocketServer(server);
+    app.set('io', io);
 
     server.listen(PORT, () => {
       logger.info(`SecureChat backend listening on port ${PORT}`);

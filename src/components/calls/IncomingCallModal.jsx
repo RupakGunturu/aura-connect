@@ -13,9 +13,7 @@ export default function IncomingCallModal() {
           {incomingCall.callerName?.slice(0, 2) ?? "?"}
         </div>
         <p className="text-lg font-semibold">{incomingCall.callerName}</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Incoming {incomingCall.type} call...
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">Incoming {incomingCall.type} call...</p>
         <div className="mt-6 flex justify-center gap-6">
           <button
             onClick={rejectCall}

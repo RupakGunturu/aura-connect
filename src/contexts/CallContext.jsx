@@ -58,7 +58,10 @@ export function CallProvider({ children }) {
     }
 
     function onEnded(payload) {
-      if (activeCallRef.current?.callId === payload.callId || incomingCall?.callId === payload.callId) {
+      if (
+        activeCallRef.current?.callId === payload.callId ||
+        incomingCall?.callId === payload.callId
+      ) {
         cleanupCall();
         setActive(null);
         setIncomingCall(null);
@@ -96,35 +99,69 @@ export function CallProvider({ children }) {
     };
   }, [token]);
 
-  const startCall = useCallback(async (targetId, type, targetName) => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia(type === "video" ? { video: true, audio: true } : { audio: true });
-      localStreamRef.current = stream;
+  const startCall = useCallback(
+    async (targetId, type, targetName) => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(
+          type === "video" ? { video: true, audio: true } : { audio: true },
+        );
+        localStreamRef.current = stream;
 
-      const res = await api("/calls", {
-        method: "POST",
-        body: JSON.stringify({ participants: [user.id, targetId], metadata: { type, callerName: user.profile.name, callerAvatar: user.profile.avatarUrl } }),
-        token,
-      });
+        const res = await api("/calls", {
+          method: "POST",
+          body: JSON.stringify({
+            participants: [user.id, targetId],
+            metadata: { type, callerName: user.profile.name, callerAvatar: user.profile.avatarUrl },
+          }),
+          token,
+        });
 
-      const callId = res.session._id;
-      setActive({ callId, peerId: targetId, peerName: targetName, type, status: "calling", startTime: Date.now() });
+        const callId = res.session._id;
+        setActive({
+          callId,
+          peerId: targetId,
+          peerName: targetName,
+          type,
+          status: "calling",
+          startTime: Date.now(),
+        });
 
-      getSocket(token).emit("callInvite", { targetId, callId, type, callerName: user.profile.name, callerAvatar: user.profile.avatarUrl });
-    } catch {
-      cleanupCall();
-    }
-  }, [user, token, cleanupCall]);
+        getSocket(token).emit("callInvite", {
+          targetId,
+          callId,
+          type,
+          callerName: user.profile.name,
+          callerAvatar: user.profile.avatarUrl,
+        });
+      } catch {
+        cleanupCall();
+      }
+    },
+    [user, token, cleanupCall],
+  );
 
   const acceptCall = useCallback(async () => {
     if (!incomingCall) return;
     const { callId, callerId, callerName, type } = incomingCall;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia(type === "video" ? { video: true, audio: true } : { audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia(
+        type === "video" ? { video: true, audio: true } : { audio: true },
+      );
       localStreamRef.current = stream;
 
-      await api(`/calls/${callId}`, { method: "PATCH", body: JSON.stringify({ status: "active" }), token });
-      setActive({ callId, peerId: callerId, peerName: callerName, type, status: "connecting", startTime: Date.now() });
+      await api(`/calls/${callId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "active" }),
+        token,
+      });
+      setActive({
+        callId,
+        peerId: callerId,
+        peerName: callerName,
+        type,
+        status: "connecting",
+        startTime: Date.now(),
+      });
       setIncomingCall(null);
 
       getSocket(token).emit("callAccept", { targetId: callerId, callId });
@@ -169,7 +206,10 @@ export function CallProvider({ children }) {
 
       pc.onicecandidate = (event) => {
         if (event.candidate) {
-          getSocket(token).emit("webrtcIceCandidate", { targetId, candidate: event.candidate.toJSON() });
+          getSocket(token).emit("webrtcIceCandidate", {
+            targetId,
+            candidate: event.candidate.toJSON(),
+          });
         }
       };
 
@@ -201,7 +241,10 @@ export function CallProvider({ children }) {
 
       pc.onicecandidate = (event) => {
         if (event.candidate) {
-          getSocket(token).emit("webrtcIceCandidate", { targetId: payload.senderId, candidate: event.candidate.toJSON() });
+          getSocket(token).emit("webrtcIceCandidate", {
+            targetId: payload.senderId,
+            candidate: event.candidate.toJSON(),
+          });
         }
       };
 
@@ -233,7 +276,16 @@ export function CallProvider({ children }) {
     }
   }
 
-  const value = { incomingCall, activeCall, startCall, acceptCall, rejectCall, endCall, localStream: localStreamRef, remoteStream: remoteStreamRef };
+  const value = {
+    incomingCall,
+    activeCall,
+    startCall,
+    acceptCall,
+    rejectCall,
+    endCall,
+    localStream: localStreamRef,
+    remoteStream: remoteStreamRef,
+  };
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
 }

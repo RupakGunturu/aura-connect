@@ -20,9 +20,7 @@ export function AuthForm({ mode }) {
     e.preventDefault();
     setError(null);
     const schema = isSignup ? signupSchema : loginSchema;
-    const parsed = schema.safeParse(
-      isSignup ? { email, password, handle } : { email, password },
-    );
+    const parsed = schema.safeParse(isSignup ? { email, password, handle } : { email, password });
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Invalid input");
       return;
@@ -30,12 +28,16 @@ export function AuthForm({ mode }) {
     setBusy(true);
     try {
       const body = isSignup
-        ? { email: parsed.data.email, password: parsed.data.password, profile: { name: parsed.data.handle, handle: parsed.data.handle } }
+        ? {
+            email: parsed.data.email,
+            password: parsed.data.password,
+            profile: { name: parsed.data.handle, handle: parsed.data.handle },
+          }
         : parsed.data;
-      const data = await api(
-        isSignup ? "/auth/register" : "/auth/login",
-        { method: "POST", body: JSON.stringify(body) },
-      );
+      const data = await api(isSignup ? "/auth/register" : "/auth/login", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
       if (isSignup) {
         toast.success("Account created! Please sign in.");
         navigate("/login");
@@ -138,14 +140,7 @@ export function AuthForm({ mode }) {
   );
 }
 
-function Field({
-  label,
-  value,
-  onChange,
-  type = "text",
-  placeholder,
-  autoComplete,
-}) {
+function Field({ label, value, onChange, type = "text", placeholder, autoComplete }) {
   return (
     <label className="block">
       <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -162,4 +157,3 @@ function Field({
     </label>
   );
 }
-

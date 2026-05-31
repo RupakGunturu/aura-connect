@@ -1,22 +1,36 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff, Video, Loader } from "lucide-react";
+import {
+  Phone,
+  PhoneIncoming,
+  PhoneOutgoing,
+  PhoneMissed,
+  PhoneOff,
+  Video,
+  Loader,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCall } from "@/contexts/CallContext";
 
 function CallIcon({ session, userId }) {
   const type = session.metadata?.type ?? "voice";
-  const isOutgoing = session.participants?.[0]?._id === userId || session.participants?.[0]?.id === userId;
+  const isOutgoing =
+    session.participants?.[0]?._id === userId || session.participants?.[0]?.id === userId;
   const status = session.status;
 
   if (type === "video") {
-    if (status === "ended") return <Video className={`size-4 ${isOutgoing ? "text-muted-foreground" : "text-red-400"}`} />;
+    if (status === "ended")
+      return (
+        <Video className={`size-4 ${isOutgoing ? "text-muted-foreground" : "text-red-400"}`} />
+      );
     return <Video className="size-4 text-green-400" />;
   }
 
-  if (status === "missed" || (status === "ended" && !isOutgoing)) return <PhoneMissed className="size-4 text-red-400" />;
-  if (status === "ended" && isOutgoing) return <PhoneOutgoing className="size-4 text-muted-foreground" />;
+  if (status === "missed" || (status === "ended" && !isOutgoing))
+    return <PhoneMissed className="size-4 text-red-400" />;
+  if (status === "ended" && isOutgoing)
+    return <PhoneOutgoing className="size-4 text-muted-foreground" />;
   if (status === "active") return <Phone className="size-4 text-green-400" />;
   return <Phone className="size-4 text-muted-foreground" />;
 }
@@ -37,7 +51,9 @@ export default function Calls() {
   }, [token]);
 
   function otherParticipant(session) {
-    return session.participants?.find((p) => (p._id ?? p.id) !== user?.id) ?? session.participants?.[0];
+    return (
+      session.participants?.find((p) => (p._id ?? p.id) !== user?.id) ?? session.participants?.[0]
+    );
   }
 
   function duration(session) {
@@ -74,9 +90,7 @@ export default function Calls() {
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Phone className="mb-3 size-10 text-muted-foreground/40" />
             <p className="text-sm font-medium">No calls yet</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Start a call from any conversation
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Start a call from any conversation</p>
           </div>
         ) : (
           <div className="divide-y divide-border">
@@ -98,10 +112,19 @@ export default function Calls() {
                     <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                       <CallIcon session={s} userId={user?.id} />
                       <span>
-                        {s.status === "active" ? "Ongoing" : s.status === "pending" ? "Missed" : duration(s) || "Ended"}
+                        {s.status === "active"
+                          ? "Ongoing"
+                          : s.status === "pending"
+                            ? "Missed"
+                            : duration(s) || "Ended"}
                       </span>
                       <span>·</span>
-                      <span>{new Date(s.createdAt).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
+                      <span>
+                        {new Date(s.createdAt).toLocaleDateString([], {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </span>
                     </div>
                   </div>
                   {otherId && (

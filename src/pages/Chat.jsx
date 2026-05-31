@@ -1,17 +1,38 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { Search, Send, ArrowLeft, MessageCircle, UserPlus, Phone, Video } from "lucide-react";
-import { api } from "@/lib/api";
+import { MessageCircle } from "lucide-react";
+import { api, API_URL } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCall } from "@/contexts/CallContext";
-import { connectSocket, disconnectSocket } from "@/lib/socket";
+import { connectSocket } from "@/lib/socket";
+import {
+  generateKeyPair,
+  deriveSharedSecret,
+  encryptMessage,
+  decryptMessage,
+  encryptFile,
+} from "@/lib/e2ee";
+import { storeKey, getKey, removeKey, setCurrentUser, clearAllKeys } from "@/lib/keyStore";
+import ConversationList from "@/components/chat/ConversationList";
+import AddFriend from "@/components/chat/AddFriend";
+import ChatHeader from "@/components/chat/ChatHeader";
+import MessageList from "@/components/chat/MessageList";
+import MessageInput from "@/components/chat/MessageInput";
+
+function uid(key) {
+  return (u) => `${u}:${key}`;
+}
+const USER_ID_KEY = "userId";
+const PRIVATE_KEY_FN = uid("privateKey");
+const PUBLIC_KEY_FN = uid("publicKey");
 
 export default function Chat() {
   const { user, token } = useAuth();
   const { startCall } = useCall();
   const navigate = useNavigate();
   const { conversationId } = useParams();
+
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
   const [body, setBody] = useState("");
@@ -19,19 +40,147 @@ export default function Chat() {
   const [searchResults, setSearchResults] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
   const [loading, setLoading] = useState(true);
-  const messagesEndRef = useRef(null);
+  const [onlineUsers, setOnlineUsers] = useState(new Set());
+  const [unreadCounts, setUnreadCounts] = useState({});
+  const [e2eeReady, setE2eeReady] = useState(false);
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
+  const sharedSecretsRef = useRef({});
+  const pendingSecretsRef = useRef({});
+  const peerPublicKeysRef = useRef({});
+  const socketRef = useRef(null);
+  const messageCounterRef = useRef(0);
+
+  const activeConversation = conversations.find((c) => c._id === conversationId);
+
+  function otherParticipant(conversation) {
+    return (
+      conversation?.participants?.find((p) => p._id !== user?.id) ?? conversation?.participants?.[0]
+    );
+  }
+
+  async function initE2EE() {
+    try {
+      setCurrentUser(user.id);
+      const storedUserId = await getKey(USER_ID_KEY, user.id);
+      if (storedUserId !== user.id) {
+        sharedSecretsRef.current = {};
+        await clearAllKeys();
+        const kp = generateKeyPair();
+        await storeKey(USER_ID_KEY, user.id, user.id);
+        await storeKey(PRIVATE_KEY_FN(user.id), kp.privateKey, user.id);
+        await storeKey(PUBLIC_KEY_FN(user.id), kp.publicKey, user.id);
+        await api("/users/me/public-key", {
+          method: "PUT",
+          body: JSON.stringify({ publicKey: kp.publicKey }),
+          token,
+        });
+      } else {
+        const pubKey = await getKey(PUBLIC_KEY_FN(user.id), user.id);
+        if (pubKey) {
+          try {
+            await api("/users/me/public-key", {
+              method: "PUT",
+              body: JSON.stringify({ publicKey: pubKey }),
+              token,
+            });
+          } catch {
+            // server might reject if unchanged, ignore
+          }
+        }
+      }
+      setE2eeReady(true);
+    } catch (err) {
+      console.error("E2EE init failed", err);
+      toast.error("Encryption setup failed. Messages will not be encrypted.");
+    }
+  }
+
+  async function getSharedSecret(peerId) {
+    if (pendingSecretsRef.current[peerId]) {
+      return pendingSecretsRef.current[peerId];
+    }
+
+    const promise = (async () => {
+      try {
+        let peerPubKey = peerPublicKeysRef.current[peerId];
+        const indexKey = [user.id, peerId].sort().join(":");
+
+        if (peerPubKey) {
+          const cacheKey = [user.id, peerId, peerPubKey].join(":");
+          if (sharedSecretsRef.current[cacheKey]) return sharedSecretsRef.current[cacheKey];
+
+          const [cachedSecret, cachedPubKey] = await Promise.all([
+            getKey(`sharedSecret:${indexKey}`, user.id),
+            getKey(`sharedSecretPubKey:${indexKey}`, user.id),
+          ]);
+          if (cachedSecret && cachedPubKey === peerPubKey) {
+            sharedSecretsRef.current[cacheKey] = cachedSecret;
+            return cachedSecret;
+          }
+        } else {
+          const [cachedSecret, cachedPubKey] = await Promise.all([
+            getKey(`sharedSecret:${indexKey}`, user.id),
+            getKey(`sharedSecretPubKey:${indexKey}`, user.id),
+          ]);
+          if (cachedSecret && cachedPubKey) {
+            peerPublicKeysRef.current[peerId] = cachedPubKey;
+            const cacheKey = [user.id, peerId, cachedPubKey].join(":");
+            sharedSecretsRef.current[cacheKey] = cachedSecret;
+            return cachedSecret;
+          }
+        }
+
+        if (!peerPubKey) {
+          const res = await api(`/users/${peerId}/public-key`, { token });
+          peerPubKey = res.publicKey;
+          if (!peerPubKey) {
+            toast.error(`User has no public key — messages won't be encrypted`);
+            return null;
+          }
+          peerPublicKeysRef.current[peerId] = peerPubKey;
+        }
+
+        const cacheKey = [user.id, peerId, peerPubKey].join(":");
+        if (sharedSecretsRef.current[cacheKey]) return sharedSecretsRef.current[cacheKey];
+
+        const [cachedSecret, cachedPubKey] = await Promise.all([
+          getKey(`sharedSecret:${indexKey}`, user.id),
+          getKey(`sharedSecretPubKey:${indexKey}`, user.id),
+        ]);
+        if (cachedSecret && cachedPubKey === peerPubKey) {
+          sharedSecretsRef.current[cacheKey] = cachedSecret;
+          return cachedSecret;
+        }
+
+        const privKey = await getKey(PRIVATE_KEY_FN(user.id), user.id);
+        if (!privKey) {
+          toast.error("Your encryption key is missing. Re-login to generate a new one.");
+          return null;
+        }
+        const secret = deriveSharedSecret(privKey, peerPubKey);
+        sharedSecretsRef.current[cacheKey] = secret;
+        await Promise.all([
+          storeKey(`sharedSecret:${indexKey}`, secret, user.id),
+          storeKey(`sharedSecretPubKey:${indexKey}`, peerPubKey, user.id),
+        ]);
+        return secret;
+      } catch (err) {
+        console.error("Failed to get shared secret", err);
+        return null;
+      }
+    })();
+
+    pendingSecretsRef.current[peerId] = promise;
+    try {
+      return await promise;
+    } finally {
+      delete pendingSecretsRef.current[peerId];
+    }
+  }
 
   useEffect(() => {
-    const s = connectSocket(token);
-    return () => {
-      s.emit("offline");
-      disconnectSocket();
-    };
-  }, [token]);
+    if (user?.id) initE2EE();
+  }, [user?.id]);
 
   useEffect(() => {
     loadConversations();
@@ -40,38 +189,78 @@ export default function Chat() {
   useEffect(() => {
     if (conversationId) {
       loadMessages(conversationId);
+      markConversationRead(conversationId);
     }
   }, [conversationId]);
 
   useEffect(() => {
+    const s = connectSocket(token);
+    socketRef.current = s;
+
+    s.on("userOnline", ({ userId }) => {
+      setOnlineUsers((prev) => new Set(prev).add(userId));
+    });
+    s.on("userOffline", ({ userId }) => {
+      setOnlineUsers((prev) => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
+    });
+    s.on("conversationRead", ({ conversationId: cid }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.conversationId === cid && m.senderId !== user?.id ? { ...m, read: true } : m,
+        ),
+      );
+    });
+
     function onMessage(msg) {
-      if (msg.conversationId === conversationId) {
-        setMessages((prev) => [...prev, msg]);
-        scrollToBottom();
-      }
-      setConversations((prev) => {
-        const existing = prev.find((c) => c._id === msg.conversationId);
-        if (existing) {
-          return prev.map((c) =>
-            c._id === msg.conversationId ? { ...c, lastMessage: msg } : c,
-          );
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === msg._id)) return prev;
+        if (msg.conversationId === conversationId) {
+          markMessageDelivered(msg._id);
+          return [...prev, msg];
         }
         return prev;
       });
+      setConversations((prev) => {
+        const existing = prev.find((c) => c._id === msg.conversationId);
+        if (existing) {
+          return prev.map((c) => (c._id === msg.conversationId ? { ...c, lastMessage: msg } : c));
+        }
+        return prev;
+      });
+      if (msg.conversationId !== conversationId) {
+        setUnreadCounts((prev) => ({
+          ...prev,
+          [msg.conversationId]: (prev[msg.conversationId] || 0) + 1,
+        }));
+      }
     }
-    const s = connectSocket(token);
     s.on("message", onMessage);
-    return () => s.off("message", onMessage);
-  }, [conversationId, scrollToBottom]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+    s.emit("online");
+
+    return () => {
+      s.off("userOnline");
+      s.off("userOffline");
+      s.off("conversationRead");
+      s.off("message", onMessage);
+      s.emit("offline");
+    };
+  }, [token, conversationId]);
 
   async function loadConversations() {
     try {
       const data = await api("/conversations", { token });
       setConversations(data.conversations ?? []);
+      const counts = {};
+      for (const c of data.conversations ?? []) {
+        const uc = c.unreadCounts?.[user?.id] || 0;
+        if (uc > 0) counts[c._id] = uc;
+      }
+      setUnreadCounts(counts);
     } catch {
       // ignore
     } finally {
@@ -85,6 +274,28 @@ export default function Chat() {
       setMessages(data.messages ?? []);
     } catch {
       setMessages([]);
+    }
+  }
+
+  async function markConversationRead(cid) {
+    try {
+      await api(`/conversations/${cid}/read`, { method: "PATCH", token });
+      setUnreadCounts((prev) => ({ ...prev, [cid]: 0 }));
+      const s = socketRef.current;
+      if (s) {
+        s.emit("markRead", { conversationId: cid });
+        s.emit("joinConversation", cid);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  async function markMessageDelivered(msgId) {
+    try {
+      await api(`/messages/${msgId}/delivered`, { method: "PATCH", token });
+    } catch {
+      // ignore
     }
   }
 
@@ -119,14 +330,41 @@ export default function Chat() {
     }
   }
 
-  async function handleSend(e) {
-    e.preventDefault();
+  async function handleSend() {
     if (!body.trim() || !conversationId) return;
+
+    const plaintext = body.trim();
+    const peer = otherParticipant(activeConversation);
+    const secret = peer ? await getSharedSecret(peer._id) : null;
+    const counter = ++messageCounterRef.current;
+
     try {
-      await api("/messages", {
-        method: "POST",
-        body: JSON.stringify({ conversationId, body: body.trim() }),
-        token,
+      let response;
+      if (secret) {
+        const encrypted = await encryptMessage(secret, plaintext, conversationId, counter);
+        response = await api("/messages", {
+          method: "POST",
+          body: JSON.stringify({
+            conversationId,
+            encryptedPayload: encrypted.encryptedPayload,
+            iv: encrypted.iv,
+            authTag: encrypted.authTag,
+            metadata: { counter },
+          }),
+          token,
+        });
+      } else {
+        response = await api("/messages", {
+          method: "POST",
+          body: JSON.stringify({ conversationId, body: plaintext }),
+          token,
+        });
+      }
+      setMessages((prev) => {
+        const newMsg = { ...response.message, body: plaintext };
+        return prev.some((m) => m._id === response.message._id)
+          ? prev.map((m) => (m._id === response.message._id ? newMsg : m))
+          : [...prev, newMsg];
       });
       setBody("");
     } catch (err) {
@@ -134,196 +372,197 @@ export default function Chat() {
     }
   }
 
-  function formatTime(date) {
-    return new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const handleDecryptMessage = useCallback(
+    async (message) => {
+      if (!e2eeReady) return "...";
+      if (!message.encryptedPayload) return message.body || "";
+
+      if (!message.iv || !message.authTag) {
+        console.warn("missing iv or authTag for encrypted message", {
+          iv: message.iv,
+          authTag: message.authTag,
+          hasPayload: !!message.encryptedPayload,
+          msgId: message._id,
+        });
+        return "⚠️ Decryption failed";
+      }
+
+      const counter = message.metadata?.counter ?? 0;
+
+      let peerId = message.senderId;
+      if (message.senderId === user?.id) {
+        const peer = otherParticipant(activeConversation);
+        if (!peer) return message.body || "";
+        peerId = peer._id;
+      }
+
+      const secret = await getSharedSecret(peerId);
+      if (!secret) return "⚠️ Cannot decrypt — key unavailable";
+
+      try {
+        return await decryptMessage(
+          secret,
+          message.encryptedPayload,
+          message.iv,
+          message.authTag,
+          message.conversationId,
+          counter,
+        );
+      } catch (err) {
+        if (peerPublicKeysRef.current[peerId]) {
+          delete peerPublicKeysRef.current[peerId];
+          const staleIndexKey = [user.id, peerId].sort().join(":");
+          await Promise.all([
+            removeKey(`sharedSecret:${staleIndexKey}`, user.id),
+            removeKey(`sharedSecretPubKey:${staleIndexKey}`, user.id),
+          ]);
+          const retrySecret = await getSharedSecret(peerId);
+          if (retrySecret) {
+            try {
+              return await decryptMessage(
+                retrySecret,
+                message.encryptedPayload,
+                message.iv,
+                message.authTag,
+                message.conversationId,
+                counter,
+              );
+            } catch {}
+          }
+        }
+        console.error("decrypt error:", err, {
+          iv: message.iv,
+          authTag: message.authTag,
+          hasPayload: !!message.encryptedPayload,
+          counter,
+          senderId: message.senderId,
+          convId: message.conversationId,
+          msgId: message._id,
+        });
+        return "⚠️ Decryption failed";
+      }
+    },
+    [user?.id, e2eeReady, activeConversation],
+  );
+
+  async function handleUploadFile(file, type = "file") {
+    if (!conversationId) return;
+
+    const peer = otherParticipant(activeConversation);
+    const secret = peer ? await getSharedSecret(peer._id) : null;
+    const counter = ++messageCounterRef.current;
+
+    try {
+      let encryptedFile = null;
+      if (secret) {
+        encryptedFile = await encryptFile(secret, file, conversationId, counter);
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
+      const uploadRes = await fetch(`${API_URL}/api/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const uploadData = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(uploadData.error || "Upload failed");
+
+      const attachment = {
+        type: type === "image" ? "image" : "file",
+        url: uploadData.file.url,
+        name: uploadData.file.name,
+        size: uploadData.file.size,
+        encryptedPayload: encryptedFile?.encryptedPayload || null,
+        fileIv: encryptedFile?.iv || null,
+        fileAuthTag: encryptedFile?.authTag || null,
+      };
+
+      const response = await api("/messages", {
+        method: "POST",
+        body: JSON.stringify({
+          conversationId,
+          attachments: [attachment],
+          metadata: secret ? { counter } : {},
+          ...(secret ? { encryptedPayload: "_", iv: "_", authTag: "_" } : {}),
+        }),
+        token,
+      });
+      setMessages((prev) =>
+        prev.some((m) => m._id === response.message._id)
+          ? prev
+          : [...prev, response.message],
+      );
+    } catch (err) {
+      toast.error(err.message);
+    }
   }
 
-  function otherParticipant(conversation) {
-    return conversation.participants?.find((p) => p._id !== user?.id) ?? conversation.participants?.[0];
-  }
-
-  const activeConversation = conversations.find((c) => c._id === conversationId);
+  const peerUser = otherParticipant(activeConversation);
+  const isPeerOnline = onlineUsers.has(peerUser?._id);
 
   return (
     <div className="flex h-full w-full">
-      {/* Conversation list */}
-      <div className={`flex shrink-0 flex-col border-r border-border ${
-        conversationId ? "hidden md:flex md:w-80" : "w-full md:w-80"
-      }`}>
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold">Messages</h2>
-          <button
-            onClick={() => setShowSearch((v) => !v)}
-            className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-card/60 hover:text-foreground"
-          >
-            {showSearch ? <ArrowLeft className="size-4" /> : <UserPlus className="size-4" />}
-          </button>
+      {showSearch ? (
+        <div className="flex w-full flex-col border-r border-border md:w-80">
+          <AddFriend
+            show={showSearch}
+            onToggle={() => setShowSearch(false)}
+            searchQuery={searchQuery}
+            onSearch={handleSearch}
+            searchResults={searchResults}
+            onStartConversation={startConversation}
+          />
         </div>
-
-        {showSearch && (
-          <div className="border-b border-border p-3">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-                placeholder="Search by handle or email..."
-                className="w-full rounded-xl border border-border bg-background/50 py-2.5 pl-10 pr-4 text-sm outline-none transition-colors focus:border-brand"
-              />
-            </div>
-            {searchResults.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {searchResults.map((u) => (
-                  <button
-                    key={u._id}
-                    onClick={() => startConversation(u._id)}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-card/60"
-                  >
-                    <div className="grid size-8 shrink-0 place-items-center rounded-full bg-card text-xs font-semibold uppercase ring-1 ring-border">
-                      {u.profile.handle.slice(0, 2)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{u.profile.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">@{u.profile.handle}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="flex-1 overflow-y-auto">
-          {loading ? (
-            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">Loading...</div>
-          ) : conversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-sm text-muted-foreground">
-              <MessageCircle className="mb-2 size-8" />
-              <p>No conversations yet</p>
-              <p className="text-xs">Search for someone to chat with</p>
-            </div>
-          ) : (
-            conversations.map((c) => {
-              const other = otherParticipant(c);
-              return (
-                <button
-                  key={c._id}
-                  onClick={() => navigate(`/chat/${c._id}`)}
-                  className={`flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-card/30 ${
-                    c._id === conversationId ? "bg-card/50" : ""
-                  }`}
-                >
-                  <div className="grid size-10 shrink-0 place-items-center rounded-full bg-card text-sm font-semibold uppercase ring-1 ring-border">
-                    {other?.profile?.handle?.slice(0, 2) ?? "?"}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{other?.profile?.name ?? "Unknown"}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      @{other?.profile?.handle ?? "—"}
-                    </p>
-                  </div>
-                </button>
-              );
-            })
-          )}
+      ) : (
+        <div
+          className={`flex flex-col border-r border-border ${
+            conversationId ? "hidden md:flex md:w-80" : "w-full md:w-80"
+          }`}
+        >
+          <AddFriend
+            show={showSearch}
+            onToggle={() => setShowSearch((v) => !v)}
+            searchQuery={searchQuery}
+            onSearch={handleSearch}
+            searchResults={searchResults}
+            onStartConversation={startConversation}
+          />
+          <ConversationList
+            conversations={conversations}
+            activeId={conversationId}
+            onlineUsers={onlineUsers}
+            unreadCounts={unreadCounts}
+            onSelect={(id) => navigate(`/chat/${id}`)}
+            loading={loading}
+          />
         </div>
-      </div>
+      )}
 
-      {/* Message thread */}
       <div className={`flex flex-1 flex-col ${conversationId ? "" : "hidden md:flex"}`}>
-        {conversationId ? (
+        {conversationId && activeConversation ? (
           <>
-            <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-              <button
-                onClick={() => navigate("/chat")}
-                className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-card/60 hover:text-foreground md:hidden"
-              >
-                <ArrowLeft className="size-4" />
-              </button>
-              <div className="grid size-8 shrink-0 place-items-center rounded-full bg-card text-xs font-semibold uppercase ring-1 ring-border">
-                {otherParticipant(activeConversation)?.profile?.handle?.slice(0, 2) ?? "?"}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">
-                  {otherParticipant(activeConversation)?.profile?.name ?? "Conversation"}
-                </p>
-              </div>
-              <div className="flex gap-1">
-                {(() => {
-                  const peer = otherParticipant(activeConversation);
-                  const peerId = peer?._id;
-                  const peerName = peer?.profile?.name;
-                  return (
-                    <>
-                      <button
-                        onClick={() => startCall(peerId, "voice", peerName)}
-                        className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-card/60 hover:text-foreground"
-                        title="Voice call"
-                      >
-                        <Phone className="size-4" />
-                      </button>
-                      <button
-                        onClick={() => startCall(peerId, "video", peerName)}
-                        className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-card/60 hover:text-foreground"
-                        title="Video call"
-                      >
-                        <Video className="size-4" />
-                      </button>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-4 py-4">
-              {messages.length === 0 ? (
-                <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                  No messages yet. Say hello!
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {[...messages].reverse().map((msg) => {
-                    const isOwn = msg.senderId === user?.id;
-                    return (
-                      <div key={msg._id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
-                        <div
-                          className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm ${
-                            isOwn
-                              ? "bg-brand text-brand-foreground"
-                              : "bg-card text-foreground ring-1 ring-border"
-                          }`}
-                        >
-                          <p className="whitespace-pre-wrap break-words">{msg.body}</p>
-                          <p className={`mt-0.5 text-right text-[10px] ${isOwn ? "text-brand-foreground/60" : "text-muted-foreground"}`}>
-                            {formatTime(msg.createdAt)}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div ref={messagesEndRef} />
-                </div>
-              )}
-            </div>
-
-            <form onSubmit={handleSend} className="flex items-end gap-2 border-t border-border px-4 py-3">
-              <input
-                type="text"
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder="Type a message..."
-                maxLength={4000}
-                className="flex-1 rounded-xl border border-border bg-background/50 px-4 py-2.5 text-sm outline-none transition-colors focus:border-brand"
-              />
-              <button
-                type="submit"
-                disabled={!body.trim()}
-                className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand text-brand-foreground disabled:opacity-50"
-              >
-                <Send className="size-4" />
-              </button>
-            </form>
+            <ChatHeader
+              conversation={activeConversation}
+              currentUserId={user?.id}
+              isOnline={isPeerOnline}
+              onBack={() => navigate("/chat")}
+              onVoiceCall={(peerId, peerName) => startCall(peerId, "voice", peerName)}
+              onVideoCall={(peerId, peerName) => startCall(peerId, "video", peerName)}
+            />
+            <MessageList
+              messages={messages}
+              currentUserId={user?.id}
+              decryptMessage={handleDecryptMessage}
+            />
+            <MessageInput
+              value={body}
+              onChange={setBody}
+              onSend={handleSend}
+              onUploadImage={(file) => handleUploadFile(file, "image")}
+              onUploadFile={(file) => handleUploadFile(file, "file")}
+              disabled={!e2eeReady}
+            />
           </>
         ) : (
           <div className="flex h-full flex-col items-center justify-center p-8 text-center max-md:hidden">

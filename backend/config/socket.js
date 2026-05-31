@@ -36,7 +36,7 @@ export function createSocketServer(server) {
 
   io.on('connection', (socket) => {
     socket.join(`user:${socket.user.id}`);
-    initializeChatSocket(socket);
+    initializeChatSocket(socket, io);
     initializePresenceSocket(socket);
     initializeCallSocket(socket);
     initializeWebrtcSocket(socket);
