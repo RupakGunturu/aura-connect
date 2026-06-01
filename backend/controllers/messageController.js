@@ -1,9 +1,9 @@
-import { createMessage, getConversationMessages, markMessageDelivered, markMessageRead } from '../services/messageService.js';
+import { createMessage, getConversationMessages, markMessageDelivered, markMessageRead, softDeleteMessage } from '../services/messageService.js';
 import { requireFields } from '../utils/validation.js';
 
 export async function listMessages(req, res, next) {
   try {
-    const messages = await getConversationMessages(req.params.conversationId, Number(req.query.limit) || 50);
+    const messages = await getConversationMessages(req.params.conversationId, Number(req.query.limit) || 50, req.user.id);
     res.status(200).json({ messages });
   } catch (error) {
     next(error);
@@ -18,6 +18,8 @@ export async function sendMessage(req, res, next) {
       metadata: req.body.metadata || {},
     };
     payload.body = req.body.body || '';
+    if (req.body.replyTo) payload.replyTo = req.body.replyTo;
+    if (req.body.forwardedFrom) payload.forwardedFrom = req.body.forwardedFrom;
     if (req.body.encryptedPayload) {
       payload.encryptedPayload = req.body.encryptedPayload;
       payload.iv = req.body.iv;
@@ -48,6 +50,29 @@ export async function updateDeliveryStatus(req, res, next) {
 export async function updateReadStatus(req, res, next) {
   try {
     const message = await markMessageRead(req.params.messageId);
+    res.status(200).json({ message });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteMessage(req, res, next) {
+  try {
+    const message = await softDeleteMessage(req.params.messageId, req.user.id);
+    if (!message) {
+      const error = new Error('Message not found');
+      error.status = 404;
+      throw error;
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`conversation:${message.conversationId}`).emit('messageDeleted', {
+        messageId: message._id,
+        conversationId: message.conversationId,
+      });
+    }
+
     res.status(200).json({ message });
   } catch (error) {
     next(error);

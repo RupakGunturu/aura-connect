@@ -1,6 +1,5 @@
 import { useState, useRef } from "react";
-import { Send, Image, Paperclip, Smile } from "lucide-react";
-import EmojiPicker from "./EmojiPicker";
+import { Send, Image, Paperclip, Smile, X, Reply } from "lucide-react";
 
 export default function MessageInput({
   value,
@@ -9,6 +8,8 @@ export default function MessageInput({
   onUploadImage,
   onUploadFile,
   disabled,
+  replyTarget,
+  onCancelReply,
 }) {
   const [showEmoji, setShowEmoji] = useState(false);
   const fileInputRef = useRef(null);
@@ -32,15 +33,36 @@ export default function MessageInput({
     }
   }
 
+  const replyPreview = replyTarget?.decryptedPreview
+    ? replyTarget.decryptedPreview
+    : replyTarget?.body || "";
+
   return (
-    <form onSubmit={handleSubmit} className="relative border-t border-border px-4 py-3">
+    <form onSubmit={handleSubmit} className="relative border-t border-border">
+      {replyTarget && onCancelReply && (
+        <div className="flex items-center gap-2 border-b border-border bg-card/50 px-4 py-2">
+          <Reply className="size-4 shrink-0 text-brand" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold text-brand">Replying to {replyTarget.senderName || "user"}</p>
+            <p className="truncate text-[11px] text-muted-foreground">{replyPreview}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            className="grid size-6 shrink-0 place-items-center rounded-full hover:bg-card/60"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+
       {showEmoji && (
         <div className="absolute bottom-full left-4 mb-2">
           <EmojiPicker onEmojiSelect={handleEmojiSelect} />
         </div>
       )}
 
-      <div className="flex items-end gap-1 sm:gap-2">
+      <div className="flex items-end gap-1 px-4 py-3 sm:gap-2">
         <button
           type="button"
           onClick={() => imageInputRef.current?.click()}
@@ -98,7 +120,7 @@ export default function MessageInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
+          placeholder={replyTarget ? "Reply..." : "Type a message..."}
           maxLength={4000}
           className="flex-1 rounded-xl border border-border bg-background/50 px-4 py-2.5 text-sm outline-none transition-colors focus:border-brand"
         />

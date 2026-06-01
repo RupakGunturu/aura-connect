@@ -29,6 +29,7 @@ const userSchema = new mongoose.Schema(
       showOnlineStatus: { type: Boolean, default: true },
     },
     sessions: { type: [sessionSchema], default: [] },
+    friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     publicKey: { type: String, default: '' },
   },

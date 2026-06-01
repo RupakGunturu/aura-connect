@@ -6,7 +6,6 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(null);
-  const [refreshToken, setRefreshToken] = useState(null);
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
 
@@ -17,7 +16,6 @@ export function AuthProvider({ children }) {
       if (raw) {
         const parsed = JSON.parse(raw);
         setToken(parsed.token);
-        setRefreshToken(parsed.refreshToken);
         setUser(parsed.user);
       }
     } catch {
@@ -26,21 +24,20 @@ export function AuthProvider({ children }) {
     setReady(true);
   }, []);
 
-  const save = useCallback((t, rt, u) => {
+  const save = useCallback((t, u) => {
     setToken(t);
-    setRefreshToken(rt);
     setUser(u);
     if (typeof window !== "undefined") {
       window.localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ token: t, refreshToken: rt, user: u }),
+        JSON.stringify({ token: t, user: u }),
       );
     }
   }, []);
 
   const setSession = useCallback(
-    (accessToken, refreshTk, nextUser) => {
-      save(accessToken, refreshTk, nextUser);
+    (accessToken, nextUser) => {
+      save(accessToken, nextUser);
     },
     [save],
   );
@@ -50,19 +47,18 @@ export function AuthProvider({ children }) {
       setUser((prev) => {
         if (!prev) return prev;
         const next = { ...prev, ...patch };
-        save(token, refreshToken, next);
+        save(token, next);
         return next;
       });
     },
-    [token, refreshToken, save],
+    [token, save],
   );
 
   const refreshAuth = useCallback(async () => {
-    if (!refreshToken) throw new Error("No refresh token");
     const res = await fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
+      credentials: "include",
     });
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;
@@ -70,26 +66,34 @@ export function AuthProvider({ children }) {
       const msg = (data && (data.error || data.message)) || "Refresh failed";
       throw new Error(msg);
     }
-    save(data.tokens.accessToken, data.tokens.refreshToken, data.user ?? user);
-    return data.tokens.accessToken;
-  }, [refreshToken, user, save]);
+    save(data.accessToken, data.user ?? user);
+    return data.accessToken;
+  }, [user, save]);
 
   useEffect(() => {
     setRefreshHandler(refreshAuth);
   }, [refreshAuth]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try {
+      await fetch(`${API_URL}/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+      });
+    } catch {
+      // ignore server error on logout
+    }
     setToken(null);
-    setRefreshToken(null);
     setUser(null);
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(STORAGE_KEY);
     }
-  }, []);
+  }, [token]);
 
   const value = useMemo(
-    () => ({ user, token, refreshToken, ready, setSession, updateUser, refreshAuth, logout }),
-    [user, token, refreshToken, ready, setSession, updateUser, refreshAuth, logout],
+    () => ({ user, token, ready, setSession, updateUser, refreshAuth, logout }),
+    [user, token, ready, setSession, updateUser, refreshAuth, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,6 +1,8 @@
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import compression from 'compression';
+import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { corsOptions } from './config/cors.js';
@@ -15,6 +17,8 @@ import messageRoutes from './routes/messageRoutes.js';
 import callRoutes from './routes/callRoutes.js';
 import privacyRoutes from './routes/privacyRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
+import friendRoutes from './routes/friendRoutes.js';
+import iceRoutes from './routes/iceRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +28,8 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors(corsOptions));
+app.use(compression());
+app.use(cookieParser());
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: false, limit: '5mb' }));
 app.use(apiRateLimiter);
@@ -41,6 +47,8 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/privacy', privacyRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/friends', friendRoutes);
+app.use('/api/ice-servers', iceRoutes);
 
 app.use(errorHandler);
 

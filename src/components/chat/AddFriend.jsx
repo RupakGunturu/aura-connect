@@ -1,4 +1,4 @@
-import { Search, ArrowLeft, UserPlus } from "lucide-react";
+import { Search, ArrowLeft, UserPlus, Users } from "lucide-react";
 
 export default function AddFriend({
   show,
@@ -7,17 +7,34 @@ export default function AddFriend({
   onSearch,
   searchResults,
   onStartConversation,
+  onSendFriendRequest,
+  onShowFriends,
+  friendRequestCount,
 }) {
   return (
     <>
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold">Messages</h2>
-        <button
-          onClick={onToggle}
-          className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-card/60 hover:text-foreground"
-        >
-          {show ? <ArrowLeft className="size-4" /> : <UserPlus className="size-4" />}
-        </button>
+        <div className="flex gap-1">
+          <button
+            onClick={onShowFriends}
+            className="relative grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-card/60 hover:text-foreground"
+            title="Friends"
+          >
+            <Users className="size-4" />
+            {friendRequestCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 grid size-4 place-items-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground">
+                {friendRequestCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={onToggle}
+            className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-card/60 hover:text-foreground"
+          >
+            {show ? <ArrowLeft className="size-4" /> : <UserPlus className="size-4" />}
+          </button>
+        </div>
       </div>
 
       {show && (
@@ -47,6 +64,18 @@ export default function AddFriend({
                     <p className="truncate font-medium">{u.profile.name}</p>
                     <p className="truncate text-xs text-muted-foreground">@{u.profile.handle}</p>
                   </div>
+                  {onSendFriendRequest && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSendFriendRequest(u._id);
+                      }}
+                      className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:text-brand"
+                      title="Add friend"
+                    >
+                      <UserPlus className="size-4" />
+                    </button>
+                  )}
                 </button>
               ))}
             </div>

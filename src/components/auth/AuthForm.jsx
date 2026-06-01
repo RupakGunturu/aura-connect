@@ -37,13 +37,14 @@ export function AuthForm({ mode }) {
       const data = await api(isSignup ? "/auth/register" : "/auth/login", {
         method: "POST",
         body: JSON.stringify(body),
+        credentials: "include",
       });
       if (isSignup) {
         toast.success("Account created! Please sign in.");
         navigate("/login");
         return;
       }
-      setSession(data.tokens.accessToken, data.tokens.refreshToken, data.user);
+      setSession(data.accessToken, data.user);
       toast.success("Welcome back");
       navigate(data.user.onboardingComplete ? "/chat" : "/onboarding");
     } catch (err) {

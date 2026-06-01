@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - aura-net
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - backend/.env
+    environment:
+      - NODE_ENV=production
+      - MONGO_URI=mongodb://mongo:27017/securechat
+    depends_on:
+      - mongo
+    volumes:
+      - uploads:/app/backend/uploads
+    networks:
+      - aura-net
+
+networks:
+  aura-net:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  uploads:

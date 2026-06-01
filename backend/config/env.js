@@ -16,6 +16,7 @@ const required = [
   'MONGO_URI',
   'JWT_ACCESS_SECRET',
   'JWT_REFRESH_SECRET',
+  'COOKIE_SECRET',
   'FRONTEND_ORIGIN',
   'CORS_WHITELIST'
 ];
@@ -40,9 +41,13 @@ export const env = {
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL,
   refreshTokenTtl: process.env.REFRESH_TOKEN_TTL,
+  cookieSecret: process.env.COOKIE_SECRET,
   frontendOrigin: process.env.FRONTEND_ORIGIN,
   corsWhitelist: process.env.CORS_WHITELIST.split(',').map((origin) => origin.trim()),
   rateLimitWindowMs: Number(process.env.RATE_LIMIT_WINDOW_MS),
   rateLimitMax: Number(process.env.RATE_LIMIT_MAX),
   secureCookie: process.env.SECURE_COOKIE === 'true',
+  turnUrl: process.env.TURN_URL || '',
+  turnUsername: process.env.TURN_USERNAME || '',
+  turnCredential: process.env.TURN_CREDENTIAL || '',
 };

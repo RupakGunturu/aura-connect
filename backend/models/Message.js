@@ -17,6 +17,10 @@ const messageSchema = new mongoose.Schema(
       fileIv: { type: String },
       fileAuthTag: { type: String },
     }],
+    replyTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
+    deletedAt: { type: Date, default: null },
+    forwardedFrom: { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
+    disappearsAt: { type: Date, default: null },
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
     delivered: { type: Boolean, default: false },
     read: { type: Boolean, default: false },
@@ -25,5 +29,6 @@ const messageSchema = new mongoose.Schema(
 );
 
 messageSchema.index({ conversationId: 1, createdAt: -1 });
+messageSchema.index({ disappearsAt: 1 }, { expireAfterSeconds: 0 });
 
 export const Message = mongoose.model('Message', messageSchema);

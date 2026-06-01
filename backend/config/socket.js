@@ -14,13 +14,14 @@ export function createSocketServer(server) {
       methods: ['GET', 'POST'],
       credentials: true,
     },
+    transports: env.nodeEnv === 'production' ? ['websocket'] : ['polling', 'websocket'],
     allowEIO3: false,
     pingTimeout: 20000,
     pingInterval: 25000,
   });
 
   io.use(async (socket, next) => {
-    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    const token = socket.handshake.auth?.token;
     if (!token) {
       return next(new Error('Authentication token missing'));
     }

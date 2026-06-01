@@ -19,6 +19,9 @@ import AddFriend from "@/components/chat/AddFriend";
 import ChatHeader from "@/components/chat/ChatHeader";
 import MessageList from "@/components/chat/MessageList";
 import MessageInput from "@/components/chat/MessageInput";
+import ForwardDialog from "@/components/chat/ForwardDialog";
+import FriendRequests from "@/components/chat/FriendRequests";
+import { requestNotificationPermission, showNotification, playMessageSound } from "@/lib/notifications";
 
 function uid(key) {
   return (u) => `${u}:${key}`;
@@ -36,7 +39,14 @@ export default function Chat() {
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
   const [body, setBody] = useState("");
+  const [replyTarget, setReplyTarget] = useState(null);
+  const [forwardTarget, setForwardTarget] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [messageSearchQuery, setMessageSearchQuery] = useState("");
+  const [pinnedMessages, setPinnedMessages] = useState([]);
+  const [showFriends, setShowFriends] = useState(false);
+  const [friendRequestCount, setFriendRequestCount] = useState(0);
+  const [matchingMessageIds, setMatchingMessageIds] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -49,6 +59,7 @@ export default function Chat() {
   const peerPublicKeysRef = useRef({});
   const socketRef = useRef(null);
   const messageCounterRef = useRef(0);
+  const decryptedTextCache = useRef({});
 
   const activeConversation = conversations.find((c) => c._id === conversationId);
 
@@ -180,6 +191,7 @@ export default function Chat() {
 
   useEffect(() => {
     if (user?.id) initE2EE();
+    requestNotificationPermission();
   }, [user?.id]);
 
   useEffect(() => {
@@ -192,6 +204,14 @@ export default function Chat() {
       markConversationRead(conversationId);
     }
   }, [conversationId]);
+
+  useEffect(() => {
+    if (activeConversation?.pinned) {
+      setPinnedMessages(activeConversation.pinned);
+    } else {
+      setPinnedMessages([]);
+    }
+  }, [activeConversation?.pinned]);
 
   useEffect(() => {
     const s = connectSocket(token);
@@ -207,6 +227,26 @@ export default function Chat() {
         return next;
       });
     });
+    s.on("friendRequestReceived", ({ senderName }) => {
+      setFriendRequestCount((c) => c + 1);
+      showNotification("Friend Request", {
+        body: `${senderName || "Someone"} sent you a friend request`,
+      });
+    });
+    s.on("friendRequestAccepted", () => {
+      toast.success("Friend request accepted!");
+    });
+    s.on("messagePinned", ({ messageId }) => {
+      loadConversations();
+    });
+    s.on("messageUnpinned", ({ messageId }) => {
+      loadConversations();
+    });
+    s.on("messageDeleted", ({ messageId }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === messageId ? { ...m, deletedAt: new Date().toISOString() } : m)),
+      );
+    });
     s.on("conversationRead", ({ conversationId: cid }) => {
       setMessages((prev) =>
         prev.map((m) =>
@@ -216,6 +256,13 @@ export default function Chat() {
     });
 
     function onMessage(msg) {
+      if (msg.conversationId !== conversationId && msg.senderId !== user?.id) {
+        playMessageSound();
+        showNotification("New message", {
+          body: msg.body || "Encrypted message",
+          onClick: () => navigate(`/chat/${msg.conversationId}`),
+        });
+      }
       setMessages((prev) => {
         if (prev.some((m) => m._id === msg._id)) return prev;
         if (msg.conversationId === conversationId) {
@@ -272,6 +319,9 @@ export default function Chat() {
     try {
       const data = await api(`/messages/${id}`, { token });
       setMessages(data.messages ?? []);
+      decryptedTextCache.current = {};
+      setMatchingMessageIds(null);
+      setMessageSearchQuery("");
     } catch {
       setMessages([]);
     }
@@ -340,26 +390,24 @@ export default function Chat() {
 
     try {
       let response;
+      const payload = {
+        conversationId,
+        replyTo: replyTarget?._id || undefined,
+      };
       if (secret) {
         const encrypted = await encryptMessage(secret, plaintext, conversationId, counter);
-        response = await api("/messages", {
-          method: "POST",
-          body: JSON.stringify({
-            conversationId,
-            encryptedPayload: encrypted.encryptedPayload,
-            iv: encrypted.iv,
-            authTag: encrypted.authTag,
-            metadata: { counter },
-          }),
-          token,
-        });
+        payload.encryptedPayload = encrypted.encryptedPayload;
+        payload.iv = encrypted.iv;
+        payload.authTag = encrypted.authTag;
+        payload.metadata = { counter };
       } else {
-        response = await api("/messages", {
-          method: "POST",
-          body: JSON.stringify({ conversationId, body: plaintext }),
-          token,
-        });
+        payload.body = plaintext;
       }
+      response = await api("/messages", {
+        method: "POST",
+        body: JSON.stringify(payload),
+        token,
+      });
       setMessages((prev) => {
         const newMsg = { ...response.message, body: plaintext };
         return prev.some((m) => m._id === response.message._id)
@@ -367,6 +415,161 @@ export default function Chat() {
           : [...prev, newMsg];
       });
       setBody("");
+      setReplyTarget(null);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
+  function handleForwardClick(msg) {
+    setForwardTarget(msg);
+  }
+
+  async function handleForwardSend(targetConversationId) {
+    const msg = forwardTarget;
+    if (!msg) return;
+
+    const targetConv = conversations.find((c) => c._id === targetConversationId);
+    const peer = targetConv?.participants?.find((p) => p._id !== user.id) ?? targetConv?.participants?.[0];
+    if (!peer) {
+      toast.error("Cannot forward — no peer found");
+      return;
+    }
+
+    let text = decryptedTextCache.current[msg._id];
+    if (text === undefined) {
+      try {
+        text = await handleDecryptMessage(msg);
+      } catch {
+        text = msg.body || "";
+      }
+      decryptedTextCache.current[msg._id] = text;
+    }
+    if (!text) {
+      toast.error("Cannot forward encrypted media");
+      setForwardTarget(null);
+      return;
+    }
+
+    const secret = await getSharedSecret(peer._id);
+    const counter = ++messageCounterRef.current;
+
+    try {
+      const payload = { conversationId: targetConversationId, forwardedFrom: msg._id };
+      if (secret && msg.encryptedPayload) {
+        const encrypted = await encryptMessage(secret, text, targetConversationId, counter);
+        payload.encryptedPayload = encrypted.encryptedPayload;
+        payload.iv = encrypted.iv;
+        payload.authTag = encrypted.authTag;
+        payload.metadata = { counter };
+      } else {
+        payload.body = text;
+      }
+      await api("/messages", { method: "POST", body: JSON.stringify(payload), token });
+      toast.success("Message forwarded");
+    } catch (err) {
+      toast.error(err.message);
+    }
+    setForwardTarget(null);
+  }
+
+  function handleReply(msg) {
+    const peer = otherParticipant(activeConversation);
+    const senderName = msg.senderId === user.id ? "You" : peer?.profile?.name || "User";
+    setReplyTarget({ ...msg, senderName });
+  }
+
+  async function handleMessageSearch(query) {
+    setMessageSearchQuery(query);
+    if (!query.trim()) {
+      setMatchingMessageIds(null);
+      return;
+    }
+
+    const q = query.toLowerCase();
+    const matched = new Set();
+
+    for (const msg of messages) {
+      if (msg.deletedAt) continue;
+      let text = decryptedTextCache.current[msg._id];
+      if (text === undefined) {
+        if (msg.encryptedPayload) {
+          try {
+            text = await handleDecryptMessage(msg);
+          } catch {
+            text = "";
+          }
+        } else {
+          text = msg.body || "";
+        }
+        decryptedTextCache.current[msg._id] = text;
+      }
+      if (text && text.toLowerCase().includes(q)) {
+        matched.add(msg._id);
+      }
+    }
+    setMatchingMessageIds(matched);
+  }
+
+  async function handleSendFriendRequest(recipientId) {
+    try {
+      await api("/friends/request", {
+        method: "POST",
+        body: JSON.stringify({ recipientId }),
+        token,
+      });
+      toast.success("Friend request sent");
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
+  async function handleSetDisappear(duration) {
+    if (!conversationId) return;
+    try {
+      await api(`/conversations/${conversationId}/disappear`, {
+        method: "PATCH",
+        body: JSON.stringify({ duration }),
+        token,
+      });
+      loadConversations();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
+  async function handleClearHistory() {
+    if (!conversationId) return;
+    try {
+      await api(`/conversations/${conversationId}/clear`, { method: "POST", token });
+      setMessages([]);
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
+  async function handlePin(msg) {
+    if (!conversationId || !msg._id) return;
+    const isPinned = pinnedMessages.some((p) => (p.messageId?._id || p.messageId) === msg._id);
+    try {
+      if (isPinned) {
+        await api(`/conversations/${conversationId}/unpin/${msg._id}`, { method: "PATCH", token });
+      } else {
+        await api(`/conversations/${conversationId}/pin/${msg._id}`, { method: "PATCH", token });
+      }
+      loadConversations();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
+  async function handleDelete(msg) {
+    if (!msg._id) return;
+    try {
+      await api(`/messages/${msg._id}/delete`, { method: "POST", token });
+      setMessages((prev) =>
+        prev.map((m) => (m._id === msg._id ? { ...m, deletedAt: new Date().toISOString() } : m)),
+      );
     } catch (err) {
       toast.error(err.message);
     }
@@ -378,12 +581,7 @@ export default function Chat() {
       if (!message.encryptedPayload) return message.body || "";
 
       if (!message.iv || !message.authTag) {
-        console.warn("missing iv or authTag for encrypted message", {
-          iv: message.iv,
-          authTag: message.authTag,
-          hasPayload: !!message.encryptedPayload,
-          msgId: message._id,
-        });
+        console.warn("missing iv or authTag for encrypted message", { msgId: message._id });
         return "⚠️ Decryption failed";
       }
 
@@ -430,15 +628,7 @@ export default function Chat() {
             } catch {}
           }
         }
-        console.error("decrypt error:", err, {
-          iv: message.iv,
-          authTag: message.authTag,
-          hasPayload: !!message.encryptedPayload,
-          counter,
-          senderId: message.senderId,
-          convId: message.conversationId,
-          msgId: message._id,
-        });
+        console.error("decrypt error:", err, { msgId: message._id });
         return "⚠️ Decryption failed";
       }
     },
@@ -500,10 +690,18 @@ export default function Chat() {
 
   const peerUser = otherParticipant(activeConversation);
   const isPeerOnline = onlineUsers.has(peerUser?._id);
+  const displayMessages =
+    matchingMessageIds && messageSearchQuery.trim()
+      ? messages.filter((m) => matchingMessageIds.has(m._id))
+      : messages;
 
   return (
     <div className="flex h-full w-full">
-      {showSearch ? (
+      {showFriends ? (
+        <div className="flex w-full flex-col border-r border-border md:w-80">
+          <FriendRequests onBack={() => setShowFriends(false)} />
+        </div>
+      ) : showSearch ? (
         <div className="flex w-full flex-col border-r border-border md:w-80">
           <AddFriend
             show={showSearch}
@@ -512,6 +710,9 @@ export default function Chat() {
             onSearch={handleSearch}
             searchResults={searchResults}
             onStartConversation={startConversation}
+            onSendFriendRequest={handleSendFriendRequest}
+            onShowFriends={() => setShowFriends(true)}
+            friendRequestCount={friendRequestCount}
           />
         </div>
       ) : (
@@ -527,6 +728,9 @@ export default function Chat() {
             onSearch={handleSearch}
             searchResults={searchResults}
             onStartConversation={startConversation}
+            onSendFriendRequest={handleSendFriendRequest}
+            onShowFriends={() => setShowFriends(true)}
+            friendRequestCount={friendRequestCount}
           />
           <ConversationList
             conversations={conversations}
@@ -549,11 +753,21 @@ export default function Chat() {
               onBack={() => navigate("/chat")}
               onVoiceCall={(peerId, peerName) => startCall(peerId, "voice", peerName)}
               onVideoCall={(peerId, peerName) => startCall(peerId, "video", peerName)}
+              onClearHistory={handleClearHistory}
+              onSearch={handleMessageSearch}
+              disappearDuration={activeConversation?.disappearDuration ?? 0}
+              onSetDisappear={handleSetDisappear}
             />
             <MessageList
-              messages={messages}
+              messages={displayMessages}
               currentUserId={user?.id}
               decryptMessage={handleDecryptMessage}
+              onReply={handleReply}
+              onDelete={handleDelete}
+              onPin={handlePin}
+              pinnedMessages={pinnedMessages}
+              isSearching={!!messageSearchQuery.trim()}
+              onForward={handleForwardClick}
             />
             <MessageInput
               value={body}
@@ -562,6 +776,8 @@ export default function Chat() {
               onUploadImage={(file) => handleUploadFile(file, "image")}
               onUploadFile={(file) => handleUploadFile(file, "file")}
               disabled={!e2eeReady}
+              replyTarget={replyTarget}
+              onCancelReply={() => setReplyTarget(null)}
             />
           </>
         ) : (
@@ -571,6 +787,15 @@ export default function Chat() {
           </div>
         )}
       </div>
+
+      {forwardTarget && (
+        <ForwardDialog
+          conversations={conversations}
+          currentConversationId={conversationId}
+          onForward={handleForwardSend}
+          onClose={() => setForwardTarget(null)}
+        />
+      )}
     </div>
   );
 }

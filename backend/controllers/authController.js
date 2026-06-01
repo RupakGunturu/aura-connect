@@ -1,5 +1,20 @@
+import { env } from '../config/env.js';
 import { registerUser, authenticateUser, createSessionTokens, refreshSession, revokeRefreshToken, completeUserOnboarding, changePassword, deleteAccount, listSessions } from '../services/authService.js';
 import { requireFields } from '../utils/validation.js';
+
+function setRefreshCookie(res, refreshToken) {
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: env.nodeEnv === 'production',
+    sameSite: 'strict',
+    path: '/api/auth',
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+  });
+}
+
+function clearRefreshCookie(res) {
+  res.clearCookie('refreshToken', { path: '/api/auth' });
+}
 
 export async function register(req, res, next) {
   try {
@@ -17,9 +32,10 @@ export async function login(req, res, next) {
     requireFields(req.body, ['email', 'password']);
     const user = await authenticateUser(req.body.email, req.body.password);
     const tokens = await createSessionTokens(user, req.body.deviceInfo);
+    setRefreshCookie(res, tokens.refreshToken);
     res.status(200).json({
       user: { id: user._id, email: user.email, profile: user.profile, onboardingComplete: user.onboardingComplete, settings: user.settings },
-      tokens,
+      accessToken: tokens.accessToken,
     });
   } catch (error) {
     next(error);
@@ -40,14 +56,18 @@ export async function completeOnboarding(req, res, next) {
 
 export async function refreshToken(req, res, next) {
   try {
-    const { refreshToken } = req.body;
-    if (!refreshToken) {
+    const token = req.cookies?.refreshToken;
+    if (!token) {
       const error = new Error('Refresh token required');
-      error.status = 400;
+      error.status = 401;
       throw error;
     }
-    const result = await refreshSession(refreshToken);
-    res.status(200).json(result);
+    const result = await refreshSession(token);
+    setRefreshCookie(res, result.tokens.refreshToken);
+    res.status(200).json({
+      user: result.user,
+      accessToken: result.tokens.accessToken,
+    });
   } catch (error) {
     next(error);
   }
@@ -64,6 +84,7 @@ export async function logout(req, res, next) {
     if (sessionId) {
       await revokeRefreshToken(req.user.id, sessionId);
     }
+    clearRefreshCookie(res);
     res.status(204).end();
   } catch (error) {
     next(error);

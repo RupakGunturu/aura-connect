@@ -2,14 +2,15 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { api } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { useAuth } from "@/contexts/AuthContext";
+import { playCallRingtone, showNotification } from "@/lib/notifications";
 
-const STUN_SERVERS = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 const CallContext = createContext(null);
 
 export function CallProvider({ children }) {
   const { user, token } = useAuth();
   const [incomingCall, setIncomingCall] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
+  const [iceServers, setIceServers] = useState([{ urls: "stun:stun.l.google.com:19302" }]);
 
   const activeCallRef = useRef(null);
   const pcRef = useRef(null);
@@ -36,10 +37,22 @@ export function CallProvider({ children }) {
 
   useEffect(() => {
     if (!token) return;
+    api("/ice-servers", { token }).then((data) => {
+      if (data?.iceServers?.length) setIceServers(data.iceServers);
+    }).catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
     const s = getSocket(token);
 
     function onIncoming(payload) {
       setIncomingCall(payload);
+      playCallRingtone();
+      showNotification("Incoming Call", {
+        body: `${payload.callerName || "Someone"} is calling (${payload.type})`,
+        onClick: () => window.focus(),
+      });
     }
 
     function onAccepted(payload) {
@@ -140,6 +153,8 @@ export function CallProvider({ children }) {
     [user, token, cleanupCall],
   );
 
+  const RTC_CONFIG = { iceServers };
+
   const acceptCall = useCallback(async () => {
     if (!incomingCall) return;
     const { callId, callerId, callerName, type } = incomingCall;
@@ -191,7 +206,7 @@ export function CallProvider({ children }) {
   async function startWebRTC(targetId, callId) {
     try {
       if (pcRef.current) return;
-      const pc = new RTCPeerConnection(STUN_SERVERS);
+      const pc = new RTCPeerConnection(RTC_CONFIG);
       pcRef.current = pc;
 
       if (localStreamRef.current) {
@@ -226,7 +241,7 @@ export function CallProvider({ children }) {
     const current = activeCallRef.current;
     if (!current || current.status === "calling" || pcRef.current) return;
     try {
-      const pc = new RTCPeerConnection(STUN_SERVERS);
+      const pc = new RTCPeerConnection(RTC_CONFIG);
       pcRef.current = pc;
 
       if (localStreamRef.current) {
