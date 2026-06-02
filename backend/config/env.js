@@ -17,8 +17,6 @@ const required = [
   'JWT_ACCESS_SECRET',
   'JWT_REFRESH_SECRET',
   'COOKIE_SECRET',
-  'FRONTEND_ORIGIN',
-  'CORS_WHITELIST'
 ];
 
 for (const key of required) {
@@ -27,6 +25,8 @@ for (const key of required) {
   }
 }
 
+process.env.FRONTEND_ORIGIN ||= 'http://localhost:5173';
+process.env.CORS_WHITELIST ||= 'http://localhost:5173,http://localhost:5174';
 process.env.ACCESS_TOKEN_TTL ||= '15m';
 process.env.REFRESH_TOKEN_TTL ||= '30d';
 process.env.RATE_LIMIT_WINDOW_MS ||= '900000';
