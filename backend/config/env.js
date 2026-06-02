@@ -24,6 +24,9 @@ if (missing.length > 0) {
   throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
 }
 
+const present = required.filter((k) => Boolean(process.env[k]));
+console.info(`Present required environment variables: ${present.join(', ')}`);
+
 process.env.NODE_ENV ||= 'production';
 process.env.FRONTEND_ORIGIN ||= 'http://localhost:5173';
 process.env.CORS_WHITELIST ||= 'http://localhost:5173,http://localhost:5174';
