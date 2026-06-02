@@ -9,6 +9,7 @@ export async function connectDatabase() {
   mongoose.connection.on('error', (error) => logger.error('MongoDB error', error));
 
   try {
+    console.log('Attempting MongoDB connection...');
     await mongoose.connect(env.mongoUri);
     logger.info('MongoDB connection successful');
   } catch (error) {

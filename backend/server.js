@@ -6,6 +6,22 @@ import { connectDatabase } from './config/db.js';
 import { createSocketServer } from './config/socket.js';
 import { logger } from './utils/logger.js';
 
+console.log('Backend starting; NODE_ENV=', process.env.NODE_ENV || 'unset');
+console.log('Backend required env keys present:', {
+  PORT: Boolean(process.env.PORT),
+  MONGO_URI: Boolean(process.env.MONGO_URI),
+  JWT_ACCESS_SECRET: Boolean(process.env.JWT_ACCESS_SECRET),
+  JWT_REFRESH_SECRET: Boolean(process.env.JWT_REFRESH_SECRET),
+  COOKIE_SECRET: Boolean(process.env.COOKIE_SECRET),
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason && (reason.stack || reason));
+});
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error && (error.stack || error));
+});
+
 const PORT = process.env.PORT || 4000;
 let server;
 let io;
