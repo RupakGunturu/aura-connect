@@ -28,8 +28,9 @@ const present = required.filter((k) => Boolean(process.env[k]));
 console.info(`Present required environment variables: ${present.join(', ')}`);
 
 process.env.NODE_ENV ||= 'production';
+// Default frontend origins for local dev and the deployed Vercel frontends.
 process.env.FRONTEND_ORIGIN ||= 'http://localhost:5173';
-process.env.CORS_WHITELIST ||= 'http://localhost:5173,http://localhost:5174';
+process.env.CORS_WHITELIST ||= 'http://localhost:5173,http://localhost:5174,https://aura-connect-inky.vercel.app,https://aura-connect-rose.vercel.app';
 process.env.ACCESS_TOKEN_TTL ||= '15m';
 process.env.REFRESH_TOKEN_TTL ||= '30d';
 process.env.RATE_LIMIT_WINDOW_MS ||= '900000';
