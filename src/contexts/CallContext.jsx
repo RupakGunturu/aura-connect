@@ -16,6 +16,7 @@ export function CallProvider({ children }) {
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
   const remoteStreamRef = useRef(null);
+  const iceServersRef = useRef(iceServers);
 
   function setActive(v) {
     activeCallRef.current = v;
@@ -41,6 +42,10 @@ export function CallProvider({ children }) {
       if (data?.iceServers?.length) setIceServers(data.iceServers);
     }).catch(() => {});
   }, [token]);
+
+  useEffect(() => {
+    iceServersRef.current = iceServers;
+  }, [iceServers]);
 
   useEffect(() => {
     if (!token) return;
@@ -153,7 +158,7 @@ export function CallProvider({ children }) {
     [user, token, cleanupCall],
   );
 
-  const RTC_CONFIG = { iceServers };
+  const getRTCConfig = () => ({ iceServers: iceServersRef.current });
 
   const acceptCall = useCallback(async () => {
     if (!incomingCall) return;
@@ -206,7 +211,7 @@ export function CallProvider({ children }) {
   async function startWebRTC(targetId, callId) {
     try {
       if (pcRef.current) return;
-      const pc = new RTCPeerConnection(RTC_CONFIG);
+      const pc = new RTCPeerConnection(getRTCConfig());
       pcRef.current = pc;
 
       if (localStreamRef.current) {
@@ -241,7 +246,7 @@ export function CallProvider({ children }) {
     const current = activeCallRef.current;
     if (!current || current.status === "calling" || pcRef.current) return;
     try {
-      const pc = new RTCPeerConnection(RTC_CONFIG);
+      const pc = new RTCPeerConnection(getRTCConfig());
       pcRef.current = pc;
 
       if (localStreamRef.current) {

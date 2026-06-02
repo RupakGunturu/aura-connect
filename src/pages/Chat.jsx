@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { MessageCircle } from "lucide-react";
@@ -12,6 +12,7 @@ import {
   encryptMessage,
   decryptMessage,
   encryptFile,
+  decryptFile,
 } from "@/lib/e2ee";
 import { storeKey, getKey, removeKey, setCurrentUser, clearAllKeys } from "@/lib/keyStore";
 import ConversationList from "@/components/chat/ConversationList";
@@ -21,6 +22,7 @@ import MessageList from "@/components/chat/MessageList";
 import MessageInput from "@/components/chat/MessageInput";
 import ForwardDialog from "@/components/chat/ForwardDialog";
 import FriendRequests from "@/components/chat/FriendRequests";
+import TypingIndicator from "@/components/chat/TypingIndicator";
 import { requestNotificationPermission, showNotification, playMessageSound } from "@/lib/notifications";
 
 function uid(key) {
@@ -53,6 +55,12 @@ export default function Chat() {
   const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [unreadCounts, setUnreadCounts] = useState({});
   const [e2eeReady, setE2eeReady] = useState(false);
+  const [typingUsers, setTypingUsers] = useState(new Set());
+
+  const conversationIdRef = useRef(conversationId);
+  conversationIdRef.current = conversationId;
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
 
   const sharedSecretsRef = useRef({});
   const pendingSecretsRef = useRef({});
@@ -255,6 +263,23 @@ export default function Chat() {
       );
     });
 
+    s.on("typing:start", ({ userId: typingUserId, userName }) => {
+      if (typingUserId === user?.id) return;
+      setTypingUsers((prev) => {
+        const next = new Set(prev);
+        next.add(typingUserId);
+        return next;
+      });
+    });
+
+    s.on("typing:stop", ({ userId: typingUserId }) => {
+      setTypingUsers((prev) => {
+        const next = new Set(prev);
+        next.delete(typingUserId);
+        return next;
+      });
+    });
+
     function onMessage(msg) {
       if (msg.conversationId !== conversationId && msg.senderId !== user?.id) {
         playMessageSound();
@@ -294,6 +319,9 @@ export default function Chat() {
       s.off("userOffline");
       s.off("conversationRead");
       s.off("message", onMessage);
+      s.off("typing:start");
+      s.off("typing:stop");
+      setTypingUsers(new Set());
       s.emit("offline");
     };
   }, [token, conversationId]);
@@ -575,13 +603,76 @@ export default function Chat() {
     }
   }
 
+  const emitTyping = useCallback((isTyping) => {
+    const cid = conversationIdRef.current;
+    if (!cid || !socketRef.current) return;
+    socketRef.current.emit(isTyping ? "typing:start" : "typing:stop", { conversationId: cid });
+  }, []);
+
+  const handleDecryptAttachment = useCallback(
+    async (message, att) => {
+      if (!e2eeReady || !att.fileIv || !att.fileAuthTag) return att.url;
+      const counter = message.metadata?.counter ?? 0;
+
+      let peerId = message.senderId;
+      if (message.senderId === user?.id) {
+        let peer = otherParticipant(activeConversation);
+        if (!peer) {
+          const fallbackConv = conversationsRef.current.find((c) => c._id === message.conversationId);
+          peer = otherParticipant(fallbackConv);
+        }
+        if (!peer) return null;
+        peerId = peer._id;
+      }
+
+      const secret = await getSharedSecret(peerId);
+      if (!secret) return null;
+
+      const base64Part = att.url.split(",")[1];
+      if (!base64Part) return null;
+      const base64urlPayload = base64Part
+        .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+      async function decryptWithSecret(s) {
+        return URL.createObjectURL(
+          await decryptFile(
+            s, base64urlPayload, att.fileIv, att.fileAuthTag,
+            message.conversationId, counter,
+          ),
+        );
+      }
+
+      try {
+        return await decryptWithSecret(secret);
+      } catch (err) {
+        if (peerPublicKeysRef.current[peerId]) {
+          delete peerPublicKeysRef.current[peerId];
+          const staleIndexKey = [user.id, peerId].sort().join(":");
+          await Promise.all([
+            removeKey(`sharedSecret:${staleIndexKey}`, user.id),
+            removeKey(`sharedSecretPubKey:${staleIndexKey}`, user.id),
+          ]);
+          const retrySecret = await getSharedSecret(peerId);
+          if (retrySecret) {
+            try {
+              return await decryptWithSecret(retrySecret);
+            } catch {}
+          }
+        }
+        console.warn("attachment decrypt error:", err, { msgId: message._id });
+        return null;
+      }
+    },
+    [user?.id, e2eeReady, activeConversation],
+  );
+
   const handleDecryptMessage = useCallback(
     async (message) => {
       if (!e2eeReady) return "...";
       if (!message.encryptedPayload) return message.body || "";
 
       if (!message.iv || !message.authTag) {
-        console.warn("missing iv or authTag for encrypted message", { msgId: message._id });
+        console.debug("missing iv or authTag for encrypted message", { msgId: message._id });
         return "⚠️ Decryption failed";
       }
 
@@ -589,7 +680,11 @@ export default function Chat() {
 
       let peerId = message.senderId;
       if (message.senderId === user?.id) {
-        const peer = otherParticipant(activeConversation);
+        let peer = otherParticipant(activeConversation);
+        if (!peer) {
+          const fallbackConv = conversationsRef.current.find((c) => c._id === message.conversationId);
+          peer = otherParticipant(fallbackConv);
+        }
         if (!peer) return message.body || "";
         peerId = peer._id;
       }
@@ -628,7 +723,7 @@ export default function Chat() {
             } catch {}
           }
         }
-        console.error("decrypt error:", err, { msgId: message._id });
+        console.debug("decrypt error:", err, { msgId: message._id });
         return "⚠️ Decryption failed";
       }
     },
@@ -643,38 +738,62 @@ export default function Chat() {
     const counter = ++messageCounterRef.current;
 
     try {
-      let encryptedFile = null;
+      let attachment;
+      let metadata = {};
+
       if (secret) {
-        encryptedFile = await encryptFile(secret, file, conversationId, counter);
+        const encryptedFile = await encryptFile(secret, file, conversationId, counter);
+
+        const standardB64 = encryptedFile.encryptedPayload
+          .replace(/-/g, "+").replace(/_/g, "/");
+        const padded = standardB64.padEnd(Math.ceil(standardB64.length / 4) * 4, "=");
+        const encryptedBytes = Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
+        const encryptedBlob = new Blob([encryptedBytes], { type: "application/octet-stream" });
+
+        const formData = new FormData();
+        formData.append("file", encryptedBlob, file.name);
+        const uploadRes = await fetch(`${API_URL}/upload`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.error || "Upload failed");
+
+        attachment = {
+          type: type === "image" ? "image" : "file",
+          url: uploadData.file.url,
+          name: file.name,
+          size: file.size,
+          fileIv: encryptedFile.iv,
+          fileAuthTag: encryptedFile.authTag,
+        };
+        metadata = { counter };
+      } else {
+        const formData = new FormData();
+        formData.append("file", file);
+        const uploadRes = await fetch(`${API_URL}/upload`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.error || "Upload failed");
+
+        attachment = {
+          type: type === "image" ? "image" : "file",
+          url: uploadData.file.url,
+          name: uploadData.file.name,
+          size: uploadData.file.size,
+        };
       }
-
-      const formData = new FormData();
-      formData.append("file", file);
-      const uploadRes = await fetch(`${API_URL}/api/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      const uploadData = await uploadRes.json();
-      if (!uploadRes.ok) throw new Error(uploadData.error || "Upload failed");
-
-      const attachment = {
-        type: type === "image" ? "image" : "file",
-        url: uploadData.file.url,
-        name: uploadData.file.name,
-        size: uploadData.file.size,
-        encryptedPayload: encryptedFile?.encryptedPayload || null,
-        fileIv: encryptedFile?.iv || null,
-        fileAuthTag: encryptedFile?.authTag || null,
-      };
 
       const response = await api("/messages", {
         method: "POST",
         body: JSON.stringify({
           conversationId,
           attachments: [attachment],
-          metadata: secret ? { counter } : {},
-          ...(secret ? { encryptedPayload: "_", iv: "_", authTag: "_" } : {}),
+          metadata,
         }),
         token,
       });
@@ -690,6 +809,16 @@ export default function Chat() {
 
   const peerUser = otherParticipant(activeConversation);
   const isPeerOnline = onlineUsers.has(peerUser?._id);
+
+  const typingNames = useMemo(() => {
+    if (!typingUsers.size || !activeConversation?.participants) return [];
+    return [...typingUsers]
+      .map((uid) => {
+        const p = activeConversation.participants.find((part) => part._id === uid);
+        return p?.profile?.name;
+      })
+      .filter(Boolean);
+  }, [typingUsers, activeConversation?.participants]);
   const displayMessages =
     matchingMessageIds && messageSearchQuery.trim()
       ? messages.filter((m) => matchingMessageIds.has(m._id))
@@ -735,6 +864,7 @@ export default function Chat() {
           <ConversationList
             conversations={conversations}
             activeId={conversationId}
+            currentUserId={user?.id}
             onlineUsers={onlineUsers}
             unreadCounts={unreadCounts}
             onSelect={(id) => navigate(`/chat/${id}`)}
@@ -762,6 +892,7 @@ export default function Chat() {
               messages={displayMessages}
               currentUserId={user?.id}
               decryptMessage={handleDecryptMessage}
+              decryptAttachment={handleDecryptAttachment}
               onReply={handleReply}
               onDelete={handleDelete}
               onPin={handlePin}
@@ -769,6 +900,7 @@ export default function Chat() {
               isSearching={!!messageSearchQuery.trim()}
               onForward={handleForwardClick}
             />
+            <TypingIndicator names={typingNames} />
             <MessageInput
               value={body}
               onChange={setBody}
@@ -778,6 +910,7 @@ export default function Chat() {
               disabled={!e2eeReady}
               replyTarget={replyTarget}
               onCancelReply={() => setReplyTarget(null)}
+              onTypingChange={emitTyping}
             />
           </>
         ) : (

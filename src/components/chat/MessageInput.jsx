@@ -1,5 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Send, Image, Paperclip, Smile, X, Reply } from "lucide-react";
+import EmojiPicker from "./EmojiPicker";
 
 export default function MessageInput({
   value,
@@ -10,14 +11,63 @@ export default function MessageInput({
   disabled,
   replyTarget,
   onCancelReply,
+  onTypingChange,
 }) {
   const [showEmoji, setShowEmoji] = useState(false);
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
+  const typingTimerRef = useRef(null);
+  const isTypingRef = useRef(false);
+
+  function handleInputChange(e) {
+    const val = e.target.value;
+    onChange(val);
+
+    if (!val.trim()) {
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
+      if (isTypingRef.current) {
+        isTypingRef.current = false;
+        onTypingChange?.(false);
+      }
+      return;
+    }
+
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      onTypingChange?.(true);
+    }
+
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(() => {
+      isTypingRef.current = false;
+      onTypingChange?.(false);
+    }, 2000);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      if (isTypingRef.current) {
+        isTypingRef.current = false;
+        onTypingChange?.(false);
+      }
+    };
+  }, [onTypingChange]);
 
   function handleSubmit(e) {
     e.preventDefault();
     if (!value.trim() || disabled) return;
+    if (typingTimerRef.current) {
+      clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      onTypingChange?.(false);
+    }
     onSend();
   }
 
@@ -118,7 +168,7 @@ export default function MessageInput({
         <input
           type="text"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           placeholder={replyTarget ? "Reply..." : "Type a message..."}
           maxLength={4000}

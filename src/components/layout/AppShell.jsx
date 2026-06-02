@@ -15,7 +15,7 @@ export function AppShell({ children }) {
   }
 
   const items = [
-    { to: "/chat", icon: MessageCircle, label: "Messages", match: "/chat" },
+    { to: "/chat", icon: MessageCircle, label: "Chat", match: "/chat" },
     { to: "/calls", icon: Phone, label: "Calls", match: "/calls" },
     {
       to: `/profile/${user?.profile?.handle ?? ""}`,
@@ -79,7 +79,7 @@ export function AppShell({ children }) {
           }`}
         >
           <MessageCircle className="size-5" />
-          <span>Messages</span>
+          <span>Chat</span>
         </Link>
         <Link
           to="/calls"

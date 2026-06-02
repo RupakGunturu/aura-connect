@@ -45,14 +45,16 @@ export async function findUserByHandle(handle) {
   return User.findOne({ 'profile.handle': handle }).select('-passwordHash');
 }
 
-export async function searchUsers(query) {
-  return User.find({
+export async function searchUsers(query, userId) {
+  const filter = {
+    _id: { $ne: userId },
     $or: [
       { email: query },
       { 'profile.handle': query },
       { 'profile.name': { $regex: query, $options: 'i' } },
     ],
-  }).select('-passwordHash');
+  };
+  return User.find(filter).select('-passwordHash');
 }
 
 export async function blockUser(userId, targetUserId) {

@@ -19,6 +19,7 @@ import {
   Search,
   Loader,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
@@ -76,7 +77,7 @@ function EditableField({ label, value, onSave, type = "text", textarea, placehol
         </div>
         <button
           onClick={() => setEditing(true)}
-          className="ml-2 grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground opacity-0 transition-opacity hover:bg-card/60 hover:text-foreground group-hover:opacity-100"
+          className="ml-2 grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground opacity-100 md:opacity-0 transition-opacity hover:bg-card/60 hover:text-foreground md:group-hover:opacity-100"
         >
           <Pencil className="size-3.5" />
         </button>
@@ -219,12 +220,22 @@ export default function Profile() {
 
   const isOwnProfile = !handle || handle === user?.profile?.handle;
 
+  const currentSessionId = token
+    ? (() => { try { return JSON.parse(atob(token.split(".")[1])).sessionId; } catch { return null; } })()
+    : null;
+
   const profileId = profile?._id ?? profile?.id;
-  const isOnline = onlineUsers.has(profileId);
+  const isOnline = isOwnProfile
+    ? (profile ?? user)?.settings?.showOnlineStatus !== false
+    : onlineUsers.has(profileId);
 
   useEffect(() => {
     const s = connectSocket(token);
-    s.emit("online");
+    if ((profile ?? user)?.settings?.showOnlineStatus !== false) {
+      s.emit("online");
+    } else {
+      s.emit("offline");
+    }
     function onOnline({ userId }) {
       setOnlineUsers((prev) => new Set(prev).add(userId));
     }
@@ -242,7 +253,7 @@ export default function Profile() {
       s.off("userOnline", onOnline);
       s.off("userOffline", onOffline);
     };
-  }, [token]);
+  }, [token, (profile ?? user)?.settings?.showOnlineStatus]);
 
   useEffect(() => {
     if (!ready || !token) return;
@@ -335,9 +346,10 @@ export default function Profile() {
         }),
         token,
       });
-      toast.success("Password changed");
-      setShowPasswordForm(false);
-      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      toast.success("Password changed. All other sessions have been invalidated. Please log in again.");
+      disconnectSocket();
+      logout();
+      navigate("/login");
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -346,10 +358,18 @@ export default function Profile() {
   }
 
   async function revokeSession(sessionId) {
+    const isCurrent = sessionId === currentSessionId;
     try {
       await api(`/auth/sessions/${sessionId}`, { method: "DELETE", token });
-      setSessions((prev) => prev.filter((s) => s.sessionId !== sessionId));
-      toast.success("Session revoked");
+      if (isCurrent) {
+        disconnectSocket();
+        logout();
+        navigate("/login");
+        toast.success("Current session revoked. You have been logged out.");
+      } else {
+        setSessions((prev) => prev.filter((s) => s.sessionId !== sessionId));
+        toast.success("Session revoked");
+      }
     } catch (err) {
       toast.error(err.message);
     }
@@ -413,8 +433,22 @@ export default function Profile() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Loading...
+      <div className="mx-auto w-full max-w-lg space-y-6 p-6 pb-24 md:pb-6">
+        <div className="glass-card rounded-3xl border border-border p-8 shadow-2xl">
+          <div className="flex flex-col items-center text-center">
+            <Skeleton className="mb-4 size-20 rounded-full" />
+            <Skeleton className="mb-2 h-5 w-32" />
+            <Skeleton className="mb-3 h-4 w-24" />
+            <Skeleton className="mb-4 h-4 w-48" />
+            <Skeleton className="h-3 w-36" />
+          </div>
+        </div>
+        <div className="glass-card rounded-3xl border border-border p-6 shadow-2xl">
+          <Skeleton className="mb-4 h-4 w-16" />
+          <Skeleton className="mb-3 h-12 w-full" />
+          <Skeleton className="mb-3 h-12 w-full" />
+          <Skeleton className="h-20 w-full" />
+        </div>
       </div>
     );
   }
@@ -503,12 +537,14 @@ export default function Profile() {
               onSave={(v) => saveProfile("name", v)}
               placeholder="Your name"
             />
-            <EditableField
-              label="Username"
-              value={display.profile?.handle ?? ""}
-              onSave={(v) => saveProfile("handle", v)}
-              placeholder="your_handle"
-            />
+            <div className="flex items-center justify-between rounded-xl border border-transparent px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Username
+                </p>
+                <p className="mt-0.5 truncate text-sm">@{display.profile?.handle || "—"}</p>
+              </div>
+            </div>
             <EditableField
               label="Bio"
               value={display.profile?.bio ?? ""}
@@ -525,6 +561,9 @@ export default function Profile() {
                 <form onSubmit={handlePasswordChange} className="space-y-3">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     Change Password
+                  </p>
+                  <p className="text-xs text-amber-500">
+                    Changing your password will invalidate all active sessions, including this one. You will need to log in again.
                   </p>
                   <input
                     type="password"
@@ -608,6 +647,11 @@ export default function Profile() {
                         <div className="min-w-0">
                           <p className="truncate text-xs font-medium">
                             {s.deviceInfo || "Unknown device"}
+                            {s.sessionId === currentSessionId && (
+                              <span className="ml-1.5 rounded bg-brand/20 px-1.5 py-0.5 text-[9px] font-semibold text-brand">
+                                Current
+                              </span>
+                            )}
                           </p>
                           <p className="text-[10px] text-muted-foreground">
                             {new Date(s.lastActiveAt).toLocaleDateString()}

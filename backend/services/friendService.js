@@ -1,5 +1,6 @@
 import { FriendRequest } from '../models/FriendRequest.js';
 import { User } from '../models/User.js';
+import { createConversation } from './conversationService.js';
 
 export async function sendFriendRequest(senderId, recipientId) {
   if (senderId === recipientId) {
@@ -51,6 +52,8 @@ export async function acceptFriendRequest(requestId, userId) {
 
   await User.findByIdAndUpdate(request.sender, { $addToSet: { friends: request.recipient } });
   await User.findByIdAndUpdate(request.recipient, { $addToSet: { friends: request.sender } });
+
+  await createConversation([request.sender, request.recipient], null, true);
 
   return request;
 }

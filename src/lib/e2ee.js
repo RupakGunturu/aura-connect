@@ -1,7 +1,12 @@
 import { x25519 } from "@noble/curves/ed25519.js";
 
 function base64Url(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+  const bytes = new Uint8Array(buf);
+  let result = "";
+  for (let i = 0; i < bytes.length; i += 8192) {
+    result += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  }
+  return btoa(result)
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");

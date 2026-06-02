@@ -43,6 +43,17 @@ export default function FriendRequests({ onBack }) {
     loadAll();
   }
 
+  function AvatarImg({ src, name }) {
+    if (src) {
+      return <img src={src} alt="" className="size-9 shrink-0 rounded-full object-cover ring-1 ring-border" />;
+    }
+    return (
+      <div className="grid size-9 shrink-0 place-items-center rounded-full bg-card text-xs font-semibold uppercase ring-1 ring-border">
+        {name?.slice(0, 2) ?? "?"}
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
@@ -84,9 +95,7 @@ export default function FriendRequests({ onBack }) {
               <>
                 {incoming.map((r) => (
                   <div key={r._id} className="flex items-center gap-3 rounded-xl px-3 py-2.5">
-                    <div className="grid size-9 shrink-0 place-items-center rounded-full bg-card text-xs font-semibold uppercase ring-1 ring-border">
-                      {r.sender?.profile?.name?.slice(0, 2) ?? "?"}
-                    </div>
+                    <AvatarImg src={r.sender?.profile?.avatarUrl} name={r.sender?.profile?.name} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{r.sender?.profile?.name ?? "Unknown"}</p>
                       <p className="truncate text-xs text-muted-foreground">@{r.sender?.profile?.handle}</p>
@@ -111,9 +120,7 @@ export default function FriendRequests({ onBack }) {
                 ))}
                 {outgoing.map((r) => (
                   <div key={r._id} className="flex items-center gap-3 rounded-xl px-3 py-2.5 opacity-60">
-                    <div className="grid size-9 shrink-0 place-items-center rounded-full bg-card text-xs font-semibold uppercase ring-1 ring-border">
-                      {r.recipient?.profile?.name?.slice(0, 2) ?? "?"}
-                    </div>
+                    <AvatarImg src={r.recipient?.profile?.avatarUrl} name={r.recipient?.profile?.name} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{r.recipient?.profile?.name ?? "Unknown"}</p>
                       <p className="truncate text-xs text-muted-foreground">Request sent</p>
@@ -131,11 +138,9 @@ export default function FriendRequests({ onBack }) {
             ) : (
               friends.map((f) => (
                 <div key={f._id} className="flex items-center gap-3 rounded-xl px-3 py-2.5">
-                  <div className="grid size-9 shrink-0 place-items-center rounded-full bg-card text-xs font-semibold uppercase ring-1 ring-border">
-                    {f.profile?.name?.slice(0, 2) ?? "?"}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{f.profile?.name ?? "Unknown"}</p>
+                    <AvatarImg src={f.profile?.avatarUrl} name={f.profile?.name} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{f.profile?.name ?? "Unknown"}</p>
                     <p className="truncate text-xs text-muted-foreground">@{f.profile?.handle}</p>
                   </div>
                   <button

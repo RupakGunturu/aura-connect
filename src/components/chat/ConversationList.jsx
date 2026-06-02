@@ -1,4 +1,5 @@
 import { MessageCircle, ChevronDown } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function Avatar({ user, size = "md" }) {
   const sizeMap = { sm: "size-8 text-xs", md: "size-10 text-sm", lg: "size-12 text-base" };
@@ -20,6 +21,7 @@ function LastMessagePreview({ message }) {
 export default function ConversationList({
   conversations,
   activeId,
+  currentUserId,
   onlineUsers,
   unreadCounts,
   onSelect,
@@ -27,15 +29,18 @@ export default function ConversationList({
 }) {
   return (
     <div className="flex shrink-0 flex-col border-r border-border w-full md:w-80">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold">Messages</h2>
-        <ChevronDown className="size-4 text-muted-foreground" />
-      </div>
-
       <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-            Loading...
+          <div className="space-y-1 p-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl p-3">
+                <Skeleton className="size-10 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : conversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-sm text-muted-foreground">
@@ -45,7 +50,7 @@ export default function ConversationList({
           </div>
         ) : (
           conversations.map((c) => {
-            const other = c.participants?.find((p) => p._id !== activeId) ?? c.participants?.[0];
+            const other = c.participants?.find((p) => p._id !== (currentUserId ?? activeId)) ?? c.participants?.[0];
             const isOnline = onlineUsers.has(other?._id);
             const unread = unreadCounts[c._id] || 0;
             return (

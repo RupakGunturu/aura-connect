@@ -75,7 +75,7 @@ export async function queryUsers(req, res, next) {
       error.status = 400;
       throw error;
     }
-    const users = await searchUsers(q);
+    const users = await searchUsers(q, req.user.id);
     res.status(200).json({ users });
   } catch (error) {
     next(error);

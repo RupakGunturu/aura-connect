@@ -14,7 +14,7 @@ export default function AddFriend({
   return (
     <>
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold">Messages</h2>
+        <h2 className="text-sm font-semibold">Chat</h2>
         <div className="flex gap-1">
           <button
             onClick={onShowFriends}
@@ -57,9 +57,13 @@ export default function AddFriend({
                   onClick={() => onStartConversation(u._id)}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-card/60"
                 >
-                  <div className="grid size-8 shrink-0 place-items-center rounded-full bg-card text-xs font-semibold uppercase ring-1 ring-border">
-                    {u.profile.handle.slice(0, 2)}
-                  </div>
+                  {u.profile.avatarUrl ? (
+                    <img src={u.profile.avatarUrl} alt="" className="size-8 shrink-0 rounded-full object-cover ring-1 ring-border" />
+                  ) : (
+                    <div className="grid size-8 shrink-0 place-items-center rounded-full bg-card text-xs font-semibold uppercase ring-1 ring-border">
+                      {u.profile.handle.slice(0, 2)}
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{u.profile.name}</p>
                     <p className="truncate text-xs text-muted-foreground">@{u.profile.handle}</p>

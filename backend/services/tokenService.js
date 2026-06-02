@@ -10,9 +10,21 @@ export function createRefreshToken(payload) {
 }
 
 export function verifyAccessToken(token) {
-  return jwt.verify(token, env.jwtAccessSecret);
+  try {
+    return jwt.verify(token, env.jwtAccessSecret);
+  } catch {
+    const error = new Error('Access token expired or invalid');
+    error.status = 401;
+    throw error;
+  }
 }
 
 export function verifyRefreshToken(token) {
-  return jwt.verify(token, env.jwtRefreshSecret);
+  try {
+    return jwt.verify(token, env.jwtRefreshSecret);
+  } catch {
+    const error = new Error('Session expired. Please log in again.');
+    error.status = 401;
+    throw error;
+  }
 }

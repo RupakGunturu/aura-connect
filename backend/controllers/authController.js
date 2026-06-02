@@ -6,7 +6,7 @@ function setRefreshCookie(res, refreshToken) {
   res.cookie('refreshToken', refreshToken, {
     httpOnly: true,
     secure: env.nodeEnv === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
     path: '/api/auth',
     maxAge: 30 * 24 * 60 * 60 * 1000,
   });

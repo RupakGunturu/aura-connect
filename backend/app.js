@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { corsOptions } from './config/cors.js';
+import { env } from './config/env.js';
 import { apiRateLimiter } from './middleware/rateLimitMiddleware.js';
 import { sanitizeRequest } from './middleware/sanitizeMiddleware.js';
 import { securityMiddleware } from './middleware/securityMiddleware.js';
@@ -29,14 +30,13 @@ app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(compression());
-app.use(cookieParser());
-app.use(express.json({ limit: '5mb' }));
-app.use(express.urlencoded({ extended: false, limit: '5mb' }));
+app.use(cookieParser(env.cookieSecret));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 app.use(apiRateLimiter);
 app.use(securityMiddleware);
 app.use(sanitizeRequest);
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok', uptime: process.uptime() }));
 

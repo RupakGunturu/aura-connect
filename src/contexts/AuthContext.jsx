@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
-import { API_URL, setRefreshHandler } from "@/lib/api";
+import { API_URL, setRefreshHandler, setOnRefreshFail } from "@/lib/api";
+import { disconnectSocket } from "@/lib/socket";
 
-const STORAGE_KEY = "vault.session";
+const SESSION_FLAG = "vault.session";
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -11,27 +13,36 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setToken(parsed.token);
-        setUser(parsed.user);
-      }
-    } catch {
-      // ignore malformed storage
+    if (!localStorage.getItem(SESSION_FLAG)) {
+      setReady(true);
+      return;
     }
-    setReady(true);
+    fetch(`${API_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+    })
+      .then(async (res) => {
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : null;
+        if (res.ok && data) {
+          setToken(data.accessToken);
+          setUser(data.user);
+        } else {
+          localStorage.removeItem(SESSION_FLAG);
+        }
+      })
+      .catch(() => {
+        localStorage.removeItem(SESSION_FLAG);
+      })
+      .finally(() => setReady(true));
   }, []);
 
   const save = useCallback((t, u) => {
     setToken(t);
     setUser(u);
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ token: t, user: u }),
-      );
+      localStorage.setItem(SESSION_FLAG, "true");
     }
   }, []);
 
@@ -66,9 +77,9 @@ export function AuthProvider({ children }) {
       const msg = (data && (data.error || data.message)) || "Refresh failed";
       throw new Error(msg);
     }
-    save(data.accessToken, data.user ?? user);
+    save(data.accessToken, data.user);
     return data.accessToken;
-  }, [user, save]);
+  }, [save]);
 
   useEffect(() => {
     setRefreshHandler(refreshAuth);
@@ -84,12 +95,17 @@ export function AuthProvider({ children }) {
     } catch {
       // ignore server error on logout
     }
+    disconnectSocket();
     setToken(null);
     setUser(null);
     if (typeof window !== "undefined") {
-      window.localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(SESSION_FLAG);
     }
   }, [token]);
+
+  useEffect(() => {
+    setOnRefreshFail(logout);
+  }, [logout]);
 
   const value = useMemo(
     () => ({ user, token, ready, setSession, updateUser, refreshAuth, logout }),

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Pin } from "lucide-react";
 import MessageBubble from "./MessageBubble";
 
-export default function MessageList({ messages, currentUserId, decryptMessage, onReply, onDelete, isSearching, pinnedMessages, onPin, onForward }) {
+export default function MessageList({ messages, currentUserId, decryptMessage, decryptAttachment, onReply, onDelete, isSearching, pinnedMessages, onPin, onForward }) {
   const endRef = useRef(null);
 
   useEffect(() => {
@@ -57,6 +57,7 @@ export default function MessageList({ messages, currentUserId, decryptMessage, o
                 message={msg}
                 isOwn={isOwn}
                 decryptMessage={decryptMessage}
+                decryptAttachment={decryptAttachment}
                 onReply={onReply}
                 onDelete={onDelete}
                 onPin={onPin}

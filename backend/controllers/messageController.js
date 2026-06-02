@@ -25,6 +25,7 @@ export async function sendMessage(req, res, next) {
       payload.iv = req.body.iv;
       payload.authTag = req.body.authTag;
     }
+    if (req.body.attachments) payload.attachments = req.body.attachments;
     const message = await createMessage(payload);
 
     const io = req.app.get('io');

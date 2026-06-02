@@ -1,7 +1,7 @@
 export const API_URL =
-  (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000";
+  (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000/api";
 
-export const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL as string | undefined) ?? API_URL;
+export const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL as string | undefined) ?? "http://localhost:4000";
 
 export class ApiError extends Error {
   status: number;
@@ -16,6 +16,12 @@ let refreshing: Promise<string> | null = null;
 
 export function setRefreshHandler(h: () => Promise<string>) {
   refreshHandler = h;
+}
+
+let onRefreshFail: (() => void) | null = null;
+
+export function setOnRefreshFail(h: () => void) {
+  onRefreshFail = h;
 }
 
 export async function api<T = unknown>(
@@ -35,7 +41,7 @@ export async function api<T = unknown>(
 
   let res = await doFetch(token);
 
-  if (res.status === 401 && refreshHandler) {
+  if (res.status === 401 && token && refreshHandler) {
     if (!refreshing) {
       refreshing = refreshHandler().finally(() => {
         refreshing = null;
@@ -45,7 +51,7 @@ export async function api<T = unknown>(
       const newToken = await refreshing;
       res = await doFetch(newToken);
     } catch {
-      // refresh failed — throw original error
+      onRefreshFail?.();
     }
   }
 

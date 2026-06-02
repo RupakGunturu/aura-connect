@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Check, CheckCheck, File, ImageIcon, Reply, Trash2, Pin, PinOff, Forward } from "lucide-react";
+import { Check, CheckCheck, File, Reply, Trash2, Forward, Pin } from "lucide-react";
 
 function DisappearTimer({ expiresAt, isOwn }) {
   const [remaining, setRemaining] = useState("");
@@ -25,7 +25,7 @@ function DisappearTimer({ expiresAt, isOwn }) {
   if (!remaining) return null;
 
   return (
-    <div className={`mb-0.5 flex items-center gap-1 text-[10px] ${isOwn ? "text-brand-foreground/60" : "text-muted-foreground"}`}>
+    <div className={`mb-0.5 flex items-center gap-1 text-[10px] ${isOwn ? "text-foreground/60" : "text-muted-foreground"}`}>
       <span className="opacity-70">⌛ {remaining}</span>
     </div>
   );
@@ -37,11 +37,40 @@ function ReadStatus({ delivered, read }) {
   return <Check className="size-3 text-muted-foreground" />;
 }
 
-export default function MessageBubble({ message, isOwn, decryptMessage, onReply, onDelete, onPin, isPinned, onForward }) {
+export default function MessageBubble({ message, isOwn, decryptMessage, decryptAttachment, onReply, onDelete, onPin, isPinned, onForward }) {
+  const [showDeletePrompt, setShowDeletePrompt] = useState(false);
   const [decryptedBody, setDecryptedBody] = useState(null);
-  const [decryptedAttachments, setDecryptedAttachments] = useState([]);
   const [replyPreview, setReplyPreview] = useState(null);
   const [replySenderName, setReplySenderName] = useState("");
+  const [attachmentObjectUrls, setAttachmentObjectUrls] = useState({});
+  const blobUrlsRef = useRef({});
+  const longPressRef = useRef(null);
+
+  function handleContextMenu(e) {
+    if (!onDelete || !isOwn || isDeleted) return;
+    e.preventDefault();
+    setShowDeletePrompt(true);
+  }
+
+  function handleTouchStart() {
+    if (!onDelete || !isOwn || isDeleted) return;
+    longPressRef.current = setTimeout(() => {
+      setShowDeletePrompt(true);
+    }, 600);
+  }
+
+  function handleTouchEnd() {
+    if (longPressRef.current) {
+      clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (longPressRef.current) clearTimeout(longPressRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!message.encryptedPayload) return;
@@ -49,22 +78,33 @@ export default function MessageBubble({ message, isOwn, decryptMessage, onReply,
   }, [message, isOwn, decryptMessage]);
 
   useEffect(() => {
-    if (!message.attachments?.length) return;
-    Promise.allSettled(
-      message.attachments.map((att) =>
-        att.encryptedPayload
-          ? decryptMessage({
-              ...message,
-              encryptedPayload: att.encryptedPayload,
-              iv: att.fileIv,
-              authTag: att.fileAuthTag,
-            }).then((text) => ({ ...att, decryptedText: text }))
-          : Promise.resolve(att),
-      ),
+    if (!message.attachments?.length || !decryptAttachment) return;
+    let active = true;
+
+    Promise.all(
+      message.attachments.map(async (att, i) => {
+        if (!att.fileIv) return [i, null];
+        const url = await decryptAttachment(message, att);
+        return [i, url];
+      }),
     ).then((results) => {
-      setDecryptedAttachments(results.map((r) => (r.status === "fulfilled" ? r.value : r.reason)));
-    });
-  }, [message, isOwn, decryptMessage]);
+      if (!active) return;
+      const newUrls = Object.fromEntries(results.filter(([, url]) => url));
+      Object.entries(blobUrlsRef.current).forEach(([key, url]) => {
+        if (!newUrls[key] && url?.startsWith("blob:")) URL.revokeObjectURL(url);
+      });
+      blobUrlsRef.current = newUrls;
+      setAttachmentObjectUrls(newUrls);
+    }).catch((err) => console.warn("attachment decrypt effect error:", err));
+
+    return () => {
+      active = false;
+      Object.values(blobUrlsRef.current).forEach((url) => {
+        if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
+      });
+      blobUrlsRef.current = {};
+    };
+  }, [message, decryptAttachment]);
 
   useEffect(() => {
     if (!message.replyTo || typeof message.replyTo !== "object") return;
@@ -74,7 +114,7 @@ export default function MessageBubble({ message, isOwn, decryptMessage, onReply,
       decryptMessage({
         ...rep,
         senderId: rep.senderId?._id || rep.senderId,
-      }).then((text) => setReplyPreview(text));
+      }).then((text) => setReplyPreview(text && !text.startsWith("⚠️") ? text : "📎 Encrypted message"));
     } else {
       setReplyPreview(rep.body || "📎 Media");
     }
@@ -84,6 +124,7 @@ export default function MessageBubble({ message, isOwn, decryptMessage, onReply,
   const displayText = isDeleted
     ? ""
     : (message.encryptedPayload ? (decryptedBody ?? "...") : message.body || "");
+  const showText = displayText && !displayText.startsWith("⚠️");
 
   const time = new Date(message.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
@@ -105,16 +146,21 @@ export default function MessageBubble({ message, isOwn, decryptMessage, onReply,
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className={`group flex ${isOwn ? "justify-end" : "justify-start"}`}>
+      className={`group flex ${isOwn ? "justify-end" : "justify-start"}`}
+      onContextMenu={handleContextMenu}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchMove={handleTouchEnd}
+    >
       <div
         className={`relative max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-2.5 text-sm ${
-          isOwn ? "bg-brand text-brand-foreground" : "bg-card text-foreground ring-1 ring-border"
+          isOwn ? "bubble-me text-foreground" : "bg-card text-foreground ring-1 ring-border"
         }`}
       >
         {message.replyTo && typeof message.replyTo === "object" && (
           <div
             className={`mb-1.5 flex cursor-pointer items-start gap-1.5 border-l-2 pl-2.5 ${
-              isOwn ? "border-brand-foreground/50" : "border-brand/50"
+              isOwn ? "border-foreground/30" : "border-brand/50"
             }`}
             onClick={() => {
               document.getElementById(`msg-${message.replyTo._id}`)?.scrollIntoView({ behavior: "smooth" });
@@ -122,7 +168,7 @@ export default function MessageBubble({ message, isOwn, decryptMessage, onReply,
           >
             <Reply className="mt-0.5 size-3 shrink-0 opacity-60" />
             <div className="min-w-0">
-              <p className={`text-[11px] font-semibold ${isOwn ? "text-brand-foreground/70" : "text-brand"}`}>
+                <p className={`text-[11px] font-semibold ${isOwn ? "text-foreground/70" : "text-brand"}`}>
                 {replySenderName}
               </p>
               <p className="truncate text-[11px] opacity-60">{replyPreview ?? "..."}</p>
@@ -133,37 +179,49 @@ export default function MessageBubble({ message, isOwn, decryptMessage, onReply,
         {message.disappearsAt && (
           <DisappearTimer expiresAt={message.disappearsAt} isOwn={isOwn} />
         )}
-        {displayText && <p className="whitespace-pre-wrap break-words">{displayText}</p>}
+        {showText && <p className="whitespace-pre-wrap break-words">{displayText}</p>}
 
-        {message.attachments?.map((att, i) => (
-          <div
-            key={i}
-            className={`mt-2 flex items-center gap-2 rounded-xl p-2 ${
-              isOwn ? "bg-brand-foreground/10" : "bg-background/50"
-            }`}
-          >
-            {att.type === "image" ? (
-              <ImageIcon className="size-8 shrink-0 text-muted-foreground" />
-            ) : (
-              <File className="size-8 shrink-0 text-muted-foreground" />
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-medium">{att.name}</p>
-              <p className="text-[10px] text-muted-foreground">{(att.size / 1024).toFixed(1)} KB</p>
-            </div>
+        {message.attachments?.map((att, i) =>
+          att.type === "image" ? (
             <a
-              href={att.url}
-              download={att.name}
-              className="shrink-0 text-[10px] underline underline-offset-2 hover:text-brand"
+              key={i}
+              href={attachmentObjectUrls[i] || att.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 block"
             >
-              Open
+              <img
+                src={attachmentObjectUrls[i] || att.url}
+                alt={att.name}
+                className="max-h-72 w-full rounded-xl object-cover"
+              />
             </a>
-          </div>
-        ))}
+          ) : (
+            <div
+              key={i}
+              className={`mt-2 flex items-center gap-2 rounded-xl p-2 ${
+                isOwn ? "bg-foreground/10" : "bg-background/50"
+              }`}
+            >
+              <File className="size-8 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium">{att.name}</p>
+                <p className="text-[10px] text-muted-foreground">{(att.size / 1024).toFixed(1)} KB</p>
+              </div>
+              <a
+                href={attachmentObjectUrls[i] || att.url}
+                download={att.name}
+                className="shrink-0 text-[10px] underline underline-offset-2 hover:text-brand"
+              >
+                Open
+              </a>
+            </div>
+          )
+        )}
 
         <div
           className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${
-            isOwn ? "text-brand-foreground/60" : "text-muted-foreground"
+            isOwn ? "text-foreground/60" : "text-muted-foreground"
           }`}
         >
           <span>{time}</span>
@@ -171,68 +229,41 @@ export default function MessageBubble({ message, isOwn, decryptMessage, onReply,
         </div>
 
         {message.forwardedFrom && (
-          <div className={`mb-0.5 flex items-center gap-1 text-[10px] ${isOwn ? "text-brand-foreground/60" : "text-muted-foreground"}`}>
+          <div className={`mb-0.5 flex items-center gap-1 text-[10px] ${isOwn ? "text-foreground/60" : "text-muted-foreground"}`}>
             <Forward className="size-3" />
             <span>Forwarded</span>
           </div>
         )}
         {isPinned && (
-          <div className={`mb-1 flex items-center gap-1 text-[10px] ${isOwn ? "text-brand-foreground/60" : "text-brand"}`}>
+          <div className={`mb-1 flex items-center gap-1 text-[10px] ${isOwn ? "text-foreground/60" : "text-brand"}`}>
             <Pin className="size-3" />
             <span>Pinned</span>
           </div>
         )}
 
-        <div className="absolute -top-3 right-2 hidden gap-1 group-hover:flex">
-          {onReply && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onReply(message);
-              }}
-              className="rounded-full border border-border bg-background p-1 shadow-sm"
-              title="Reply"
+        {showDeletePrompt && onDelete && isOwn && !isDeleted && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setShowDeletePrompt(false)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.12 }}
+              className="absolute -top-3 right-2 z-50"
             >
-              <Reply className="size-3" />
-            </button>
-          )}
-          {onForward && !isDeleted && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onForward(message);
-              }}
-              className="rounded-full border border-border bg-background p-1 shadow-sm"
-              title="Forward"
-            >
-              <Forward className="size-3" />
-            </button>
-          )}
-          {onPin && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onPin(message);
-              }}
-              className="rounded-full border border-border bg-background p-1 shadow-sm"
-              title={isPinned ? "Unpin" : "Pin"}
-            >
-              {isPinned ? <PinOff className="size-3" /> : <Pin className="size-3" />}
-            </button>
-          )}
-          {onDelete && isOwn && !isDeleted && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(message);
-              }}
-              className="rounded-full border border-border bg-background p-1 shadow-sm hover:text-destructive"
-              title="Delete"
-            >
-              <Trash2 className="size-3" />
-            </button>
-          )}
-        </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(message);
+                  setShowDeletePrompt(false);
+                }}
+                className="flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium shadow-lg hover:bg-destructive hover:text-destructive-foreground"
+              >
+                <Trash2 className="size-3.5" />
+                <span>Delete</span>
+              </button>
+            </motion.div>
+          </>
+        )}
       </div>
     </motion.div>
   );

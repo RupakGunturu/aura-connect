@@ -59,7 +59,7 @@ export async function createSessionTokens(user, deviceInfo = '') {
 
 export async function refreshSession(refreshToken) {
   const payload = verifyRefreshToken(refreshToken);
-  const user = await User.findById(payload.id).select('-passwordHash -sessions');
+  const user = await User.findById(payload.id).select('-passwordHash');
   if (!user) {
     const error = new Error('User not found');
     error.status = 401;

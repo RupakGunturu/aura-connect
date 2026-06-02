@@ -91,13 +91,6 @@ export default function ChatHeader({
           </div>
           <div className="flex gap-1">
             <button
-              onClick={() => setShowSearch(true)}
-              className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-card/60 hover:text-foreground"
-              title="Search"
-            >
-              <Search className="size-4" />
-            </button>
-            <button
               onClick={() => onVoiceCall(other?._id, other?.profile?.name)}
               className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-card/60 hover:text-foreground"
               title="Voice call"
@@ -130,6 +123,17 @@ export default function ChatHeader({
                       transition={{ duration: 0.15 }}
                       className="absolute right-0 top-full z-50 mt-1 w-56 overflow-hidden rounded-xl border border-border bg-card py-1 shadow-lg"
                     >
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        setShowSearch(true);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground hover:bg-card/60"
+                    >
+                      <Search className="size-4" />
+                      <span>Search messages</span>
+                    </button>
+                    <div className="border-t border-border" />
                     <button
                       onClick={() => {
                         setShowDisappear((v) => !v);
@@ -174,7 +178,7 @@ export default function ChatHeader({
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-muted-foreground hover:bg-card/60 hover:text-destructive"
                     >
                       <Trash2 className="size-4" />
-                      Clear chat history
+                      Delete total history
                     </button>
                   </motion.div>
                 </>

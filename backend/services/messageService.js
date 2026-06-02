@@ -45,6 +45,14 @@ export async function createMessage(messagePayload) {
     await conversation.save();
   }
 
+  if (message.replyTo) {
+    await message.populate({
+      path: 'replyTo',
+      select: 'senderId body encryptedPayload iv authTag metadata createdAt',
+      populate: { path: 'senderId', select: 'profile.name profile.handle' },
+    });
+  }
+
   return message;
 }
 
