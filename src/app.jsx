@@ -32,7 +32,7 @@ const App = () => (
           pauseOnFocusLoss
           draggable
           pauseOnHover
-          theme="light"
+          theme="dark"
         />
         <BrowserRouter future={{ v7_startTransition: true }}>
           <IncomingCallModal />

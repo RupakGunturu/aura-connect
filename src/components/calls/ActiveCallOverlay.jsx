@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { PhoneOff, Mic, MicOff, Video, VideoOff, Maximize2, Minimize2 } from "lucide-react";
+import { PhoneOff, Mic, MicOff, Video, VideoOff, ExternalLink } from "lucide-react";
 import { useCall } from "@/contexts/CallContext";
 
 export default function ActiveCallOverlay() {
@@ -9,6 +9,7 @@ export default function ActiveCallOverlay() {
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
   const [pip, setPip] = useState(false);
+  const pipSupportedRef = useRef(typeof document !== "undefined" && "pictureInPictureEnabled" in document);
   const [elapsed, setElapsed] = useState("00:00");
 
   useEffect(() => {
@@ -72,8 +73,14 @@ export default function ActiveCallOverlay() {
       {/* Non-video background */}
       {(!isVideo || !isConnected) && (
         <div className="flex flex-1 flex-col items-center justify-center">
-          <div className="mx-auto mb-4 grid size-24 place-items-center rounded-full bg-card/20 text-4xl font-semibold uppercase text-white ring-2 ring-white/20">
-            {activeCall.peerName?.slice(0, 2) ?? "?"}
+          <div className="mx-auto mb-4 size-24 overflow-hidden rounded-full ring-2 ring-white/20">
+            {activeCall.peerAvatar ? (
+              <img src={activeCall.peerAvatar} alt="" className="size-full object-cover" />
+            ) : (
+              <div className="grid size-full place-items-center bg-card/20 text-4xl font-semibold uppercase text-white">
+                {activeCall.peerName?.slice(0, 2) ?? "?"}
+              </div>
+            )}
           </div>
           <p className="text-xl font-semibold text-white">{activeCall.peerName}</p>
           <p className="mt-1 text-sm text-white/60">
@@ -123,12 +130,21 @@ export default function ActiveCallOverlay() {
           </button>
         )}
 
-        {isVideo && (
+        {isVideo && pipSupportedRef.current && (
           <button
-            onClick={() => setPip((v) => !v)}
+            onClick={async () => {
+              try {
+                if (document.pictureInPictureElement) {
+                  await document.exitPictureInPicture();
+                } else if (remoteVideoRef.current) {
+                  await remoteVideoRef.current.requestPictureInPicture();
+                }
+              } catch {}
+            }}
             className="grid size-12 place-items-center rounded-full bg-white/20 text-white hover:bg-white/30"
+            title="Pop out video"
           >
-            {pip ? <Minimize2 className="size-5" /> : <Maximize2 className="size-5" />}
+            <ExternalLink className="size-5" />
           </button>
         )}
 

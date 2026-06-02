@@ -351,7 +351,8 @@ export default function Profile() {
       logout();
       navigate("/login");
     } catch (err) {
-      toast.error(err.message);
+      console.error("changePassword:", err.message);
+      toast.error("Failed to change password");
     } finally {
       setPasswordSaving(false);
     }
@@ -371,7 +372,8 @@ export default function Profile() {
         toast.success("Session revoked");
       }
     } catch (err) {
-      toast.error(err.message);
+      console.error("revokeSession:", err.message);
+      toast.error("Failed to revoke session");
     }
   }
 
@@ -381,7 +383,8 @@ export default function Profile() {
       setBlockedUsers((prev) => prev.filter((u) => u._id !== targetUserId));
       toast.success("User unblocked");
     } catch (err) {
-      toast.error(err.message);
+      console.error("unblock:", err.message);
+      toast.error("Failed to unblock user");
     }
   }
 
@@ -407,7 +410,8 @@ export default function Profile() {
       setBlockResults([]);
       toast.success("User blocked");
     } catch (err) {
-      toast.error(err.message);
+      console.error("blockUser:", err.message);
+      toast.error("Failed to block user");
     }
   }
 
@@ -420,7 +424,8 @@ export default function Profile() {
       navigate("/login");
       toast.success("Account deleted permanently");
     } catch (err) {
-      toast.error(err.message);
+      console.error("deleteAccount:", err.message);
+      toast.error("Failed to delete account");
       setDeleting(false);
     }
   }

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Pin } from "lucide-react";
 import MessageBubble from "./MessageBubble";
 
-export default function MessageList({ messages, currentUserId, decryptMessage, decryptAttachment, onReply, onDelete, isSearching, pinnedMessages, onPin, onForward }) {
+export default function MessageList({ messages, currentUserId, participants, decryptMessage, decryptAttachment, onReply, onDelete, isSearching, pinnedMessages, onPin, onForward }) {
   const endRef = useRef(null);
 
   useEffect(() => {
@@ -47,25 +47,28 @@ export default function MessageList({ messages, currentUserId, decryptMessage, d
         </div>
       )}
       <div className="space-y-3">
-        {[...messages]
-          .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-          .map((msg) => {
-            const isOwn = msg.senderId === currentUserId;
-            return (
-              <MessageBubble
-                key={msg._id}
-                message={msg}
-                isOwn={isOwn}
-                decryptMessage={decryptMessage}
-                decryptAttachment={decryptAttachment}
-                onReply={onReply}
-                onDelete={onDelete}
-                onPin={onPin}
-                isPinned={pinnedIds.has(msg._id)}
-                onForward={onForward}
-              />
-            );
-          })}
+          {[...messages]
+            .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+            .map((msg) => {
+              const isOwn = msg.senderId === currentUserId;
+              const senderId = typeof msg.senderId === "string" ? msg.senderId : msg.senderId?._id;
+              const sender = participants?.find((p) => (p._id ?? p.id) === senderId);
+              return (
+                <MessageBubble
+                  key={msg._id}
+                  message={msg}
+                  isOwn={isOwn}
+                  sender={sender}
+                  decryptMessage={decryptMessage}
+                  decryptAttachment={decryptAttachment}
+                  onReply={onReply}
+                  onDelete={onDelete}
+                  onPin={onPin}
+                  isPinned={pinnedIds.has(msg._id)}
+                  onForward={onForward}
+                />
+              );
+            })}
         <div ref={endRef} />
       </div>
     </div>

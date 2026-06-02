@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, useCallback } 
 import { API_URL, setRefreshHandler, setOnRefreshFail } from "@/lib/api";
 import { disconnectSocket } from "@/lib/socket";
 
-const SESSION_FLAG = "vault.session";
+const SESSION_FLAG = "session_active";
 
 const AuthContext = createContext(null);
 

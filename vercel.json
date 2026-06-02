@@ -1,0 +1,15 @@
+{
+  "experimentalServices": {
+    "frontend": {
+      "routePrefix": "/",
+      "framework": "vite",
+      "buildCommand": "npm run build",
+      "outputDirectory": "dist"
+    },
+    "backend": {
+      "root": "backend",
+      "routePrefix": "/_/backend",
+      "startCommand": "node server.js"
+    }
+  }
+}

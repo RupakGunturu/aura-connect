@@ -46,7 +46,8 @@ export async function listCalls(req, res, next) {
 
 export async function endCall(req, res, next) {
   try {
-    const session = await closeCallSession(req.params.callId);
+    const status = req.body?.status || 'ended';
+    const session = await closeCallSession(req.params.callId, status);
     res.status(200).json({ session });
   } catch (error) {
     next(error);

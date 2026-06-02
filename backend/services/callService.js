@@ -13,8 +13,8 @@ export async function updateCallSession(sessionId, update) {
   return CallSession.findByIdAndUpdate(sessionId, update, { new: true }).lean();
 }
 
-export async function closeCallSession(sessionId) {
-  return CallSession.findByIdAndUpdate(sessionId, { status: 'ended' }, { new: true }).lean();
+export async function closeCallSession(sessionId, status = 'ended') {
+  return CallSession.findByIdAndUpdate(sessionId, { status }, { new: true }).lean();
 }
 
 export async function listUserCallSessions(userId) {

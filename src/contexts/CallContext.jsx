@@ -139,6 +139,7 @@ export function CallProvider({ children }) {
           callId,
           peerId: targetId,
           peerName: targetName,
+          peerAvatar: null,
           type,
           status: "calling",
           startTime: Date.now(),
@@ -178,6 +179,7 @@ export function CallProvider({ children }) {
         callId,
         peerId: callerId,
         peerName: callerName,
+        peerAvatar: incomingCall.callerAvatar,
         type,
         status: "connecting",
         startTime: Date.now(),
@@ -193,7 +195,7 @@ export function CallProvider({ children }) {
   const rejectCall = useCallback(async () => {
     if (!incomingCall) return;
     const { callId, callerId } = incomingCall;
-    await api(`/calls/${callId}/end`, { method: "PATCH", token }).catch(() => {});
+    await api(`/calls/${callId}/end`, { method: "PATCH", body: JSON.stringify({ status: "missed" }), token }).catch(() => {});
     getSocket(token).emit("callReject", { targetId: callerId, callId });
     setIncomingCall(null);
   }, [incomingCall, token]);
@@ -201,8 +203,9 @@ export function CallProvider({ children }) {
   const endCall = useCallback(async () => {
     const current = activeCallRef.current;
     if (!current) return;
-    const { callId, peerId } = current;
-    await api(`/calls/${callId}/end`, { method: "PATCH", token }).catch(() => {});
+    const { callId, peerId, status } = current;
+    const endStatus = status === "connected" ? "ended" : "missed";
+    await api(`/calls/${callId}/end`, { method: "PATCH", body: JSON.stringify({ status: endStatus }), token }).catch(() => {});
     getSocket(token).emit("callEnd", { targetId: peerId, callId });
     cleanupCall();
     setActive(null);

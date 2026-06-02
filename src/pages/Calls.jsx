@@ -111,27 +111,37 @@ export default function Calls() {
                   key={s._id}
                   className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-card/30"
                 >
-                  <div className="grid size-10 shrink-0 place-items-center rounded-full bg-card text-sm font-semibold uppercase ring-1 ring-border">
-                    {other?.profile?.handle?.slice(0, 2) ?? "?"}
+                  <div className="size-10 shrink-0 overflow-hidden rounded-full ring-1 ring-border">
+                    {other?.profile?.avatarUrl ? (
+                      <img src={other.profile.avatarUrl} alt="" className="size-full object-cover" />
+                    ) : (
+                      <div className="grid size-full place-items-center bg-card text-sm font-semibold uppercase">
+                        {other?.profile?.handle?.slice(0, 2) ?? "?"}
+                      </div>
+                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
                       {other?.profile?.name ?? "Unknown"}
                     </p>
-                    <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <div className="mt-0.5 flex items-center gap-1.5 text-xs">
                       <CallIcon session={s} userId={user?.id} />
-                      <span>
+                      <span className={s.status === "missed" || (s.status === "ended" && !(s.participants?.[0]?._id === user?.id || s.participants?.[0]?.id === user?.id)) ? "text-red-400 font-medium" : "text-muted-foreground"}>
                         {s.status === "active"
                           ? "Ongoing"
-                          : s.status === "pending"
+                          : s.status === "missed" || s.status === "pending"
                             ? "Missed"
-                            : duration(s) || "Ended"}
+                            : s.status === "ended"
+                              ? duration(s) || "Ended"
+                              : ""}
                       </span>
-                      <span>·</span>
-                      <span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="text-muted-foreground">
                         {new Date(s.createdAt).toLocaleDateString([], {
                           month: "short",
                           day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
                         })}
                       </span>
                     </div>

@@ -404,7 +404,8 @@ export default function Chat() {
       loadConversations();
       navigate(`/chat/${data.conversation._id}`);
     } catch (err) {
-      toast.error(err.message);
+      console.error("startConversation:", err.message);
+      toast.error("Failed to start conversation");
     }
   }
 
@@ -445,7 +446,8 @@ export default function Chat() {
       setBody("");
       setReplyTarget(null);
     } catch (err) {
-      toast.error(err.message);
+      console.error("sendMessage:", err.message);
+      toast.error("Failed to send message");
     }
   }
 
@@ -496,7 +498,8 @@ export default function Chat() {
       await api("/messages", { method: "POST", body: JSON.stringify(payload), token });
       toast.success("Message forwarded");
     } catch (err) {
-      toast.error(err.message);
+      console.error("forwardMessage:", err.message);
+      toast.error("Failed to forward message");
     }
     setForwardTarget(null);
   }
@@ -548,7 +551,8 @@ export default function Chat() {
       });
       toast.success("Friend request sent");
     } catch (err) {
-      toast.error(err.message);
+      console.error("addFriend:", err.message);
+      toast.error("Failed to send friend request");
     }
   }
 
@@ -562,7 +566,8 @@ export default function Chat() {
       });
       loadConversations();
     } catch (err) {
-      toast.error(err.message);
+      console.error("setDisappear:", err.message);
+      toast.error("Failed to update disappearing messages");
     }
   }
 
@@ -572,7 +577,8 @@ export default function Chat() {
       await api(`/conversations/${conversationId}/clear`, { method: "POST", token });
       setMessages([]);
     } catch (err) {
-      toast.error(err.message);
+      console.error("clearHistory:", err.message);
+      toast.error("Failed to clear history");
     }
   }
 
@@ -587,7 +593,8 @@ export default function Chat() {
       }
       loadConversations();
     } catch (err) {
-      toast.error(err.message);
+      console.error("pinMessage:", err.message);
+      toast.error("Failed to pin message");
     }
   }
 
@@ -599,7 +606,8 @@ export default function Chat() {
         prev.map((m) => (m._id === msg._id ? { ...m, deletedAt: new Date().toISOString() } : m)),
       );
     } catch (err) {
-      toast.error(err.message);
+      console.error("deleteMessage:", err.message);
+      toast.error("Failed to delete message");
     }
   }
 
@@ -659,7 +667,6 @@ export default function Chat() {
             } catch {}
           }
         }
-        console.warn("attachment decrypt error:", err, { msgId: message._id });
         return null;
       }
     },
@@ -803,7 +810,8 @@ export default function Chat() {
           : [...prev, response.message],
       );
     } catch (err) {
-      toast.error(err.message);
+      console.error("uploadFile:", err.message);
+      toast.error("Failed to upload file");
     }
   }
 
@@ -891,6 +899,7 @@ export default function Chat() {
             <MessageList
               messages={displayMessages}
               currentUserId={user?.id}
+              participants={activeConversation?.participants}
               decryptMessage={handleDecryptMessage}
               decryptAttachment={handleDecryptAttachment}
               onReply={handleReply}

@@ -7,7 +7,7 @@ const __dirname = path.dirname(__filename);
 
 const envResult = dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 if (envResult.error) {
-  throw new Error('Failed to load backend .env configuration');
+  console.warn('No .env file found — relying on Vercel environment variables');
 }
 
 const required = [

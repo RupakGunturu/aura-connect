@@ -4,7 +4,7 @@ const callSessionSchema = new mongoose.Schema(
   {
     participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }],
     conversationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation' },
-    status: { type: String, enum: ['pending', 'active', 'ended'], default: 'pending' },
+    status: { type: String, enum: ['pending', 'active', 'ended', 'missed'], default: 'pending' },
     signalingData: { type: mongoose.Schema.Types.Mixed, default: {} },
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   },

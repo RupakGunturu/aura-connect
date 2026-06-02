@@ -37,7 +37,7 @@ function ReadStatus({ delivered, read }) {
   return <Check className="size-3 text-muted-foreground" />;
 }
 
-export default function MessageBubble({ message, isOwn, decryptMessage, decryptAttachment, onReply, onDelete, onPin, isPinned, onForward }) {
+export default function MessageBubble({ message, isOwn, sender, decryptMessage, decryptAttachment, onReply, onDelete, onPin, isPinned, onForward }) {
   const [showDeletePrompt, setShowDeletePrompt] = useState(false);
   const [decryptedBody, setDecryptedBody] = useState(null);
   const [replyPreview, setReplyPreview] = useState(null);
@@ -95,7 +95,7 @@ export default function MessageBubble({ message, isOwn, decryptMessage, decryptA
       });
       blobUrlsRef.current = newUrls;
       setAttachmentObjectUrls(newUrls);
-    }).catch((err) => console.warn("attachment decrypt effect error:", err));
+    }).catch(() => {});
 
     return () => {
       active = false;
@@ -146,12 +146,23 @@ export default function MessageBubble({ message, isOwn, decryptMessage, decryptA
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className={`group flex ${isOwn ? "justify-end" : "justify-start"}`}
+      className={`group flex items-end gap-2 ${isOwn ? "justify-end" : "justify-start"}`}
       onContextMenu={handleContextMenu}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onTouchMove={handleTouchEnd}
     >
+      {!isOwn && (
+        <div className="mb-0.5 size-7 shrink-0 overflow-hidden rounded-full ring-1 ring-border">
+          {sender?.profile?.avatarUrl ? (
+            <img src={sender.profile.avatarUrl} alt="" className="size-full object-cover" />
+          ) : (
+            <div className="grid size-full place-items-center bg-card text-[10px] font-semibold uppercase">
+              {sender?.profile?.handle?.slice(0, 2) ?? "?"}
+            </div>
+          )}
+        </div>
+      )}
       <div
         className={`relative max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-2.5 text-sm ${
           isOwn ? "bubble-me text-foreground" : "bg-card text-foreground ring-1 ring-border"
