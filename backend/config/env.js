@@ -18,10 +18,10 @@ const required = [
   'COOKIE_SECRET',
 ];
 
-for (const key of required) {
-  if (!process.env[key]) {
-    throw new Error(`Missing required environment variable: ${key}`);
-  }
+const missing = required.filter((k) => !process.env[k]);
+if (missing.length > 0) {
+  console.error(`Missing required environment variables: ${missing.join(', ')}`);
+  throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
 }
 
 process.env.NODE_ENV ||= 'production';
