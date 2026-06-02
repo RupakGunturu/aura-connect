@@ -1,7 +1,17 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { MessageCircle } from "lucide-react";
+import {
+  MessageCircle,
+  Search,
+  Send,
+  Paperclip,
+  ImageIcon,
+  Reply,
+  X,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { api, API_URL } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCall } from "@/contexts/CallContext";
@@ -14,7 +24,13 @@ import {
   encryptFile,
   decryptFile,
 } from "@/lib/e2ee";
-import { storeKey, getKey, removeKey, setCurrentUser, clearAllKeys } from "@/lib/keyStore";
+import {
+  storeKey,
+  getKey,
+  removeKey,
+  setCurrentUser,
+  clearAllKeys,
+} from "@/lib/keyStore";
 import ConversationList from "@/components/chat/ConversationList";
 import AddFriend from "@/components/chat/AddFriend";
 import ChatHeader from "@/components/chat/ChatHeader";
@@ -23,8 +39,11 @@ import MessageInput from "@/components/chat/MessageInput";
 import ForwardDialog from "@/components/chat/ForwardDialog";
 import FriendRequests from "@/components/chat/FriendRequests";
 import TypingIndicator from "@/components/chat/TypingIndicator";
-import { requestNotificationPermission, showNotification, playMessageSound } from "@/lib/notifications";
+import {
+  requestNotificationPermission,
+} from "@/lib/notifications";
 
+/* ─── key helpers ────────────────────────────────────────────────────────── */
 function uid(key) {
   return (u) => `${u}:${key}`;
 }
@@ -32,11 +51,315 @@ const USER_ID_KEY = "userId";
 const PRIVATE_KEY_FN = uid("privateKey");
 const PUBLIC_KEY_FN = uid("publicKey");
 
+/* ─── styles ─────────────────────────────────────────────────────────────── */
+const S = {
+  root: {
+    display: "flex",
+    height: "100%",
+    width: "100%",
+    overflow: "hidden",
+    background: "#0a0a0a",
+    fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
+  },
+
+  /* sidebar */
+  sidebar: {
+    display: "flex",
+    flexDirection: "column",
+    width: "320px",
+    minWidth: "320px",
+    height: "100%",
+    background: "#111111",
+    borderRight: "1px solid #1f1f1f",
+    overflow: "hidden",
+  },
+  sidebarHidden: { display: "none" },
+  sidebarHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "16px 16px 12px",
+    borderBottom: "1px solid #1f1f1f",
+    flexShrink: 0,
+  },
+  sidebarTitle: {
+    fontSize: "18px",
+    fontWeight: 600,
+    color: "#f5f5f5",
+    letterSpacing: "-0.3px",
+    margin: 0,
+  },
+  iconBtn: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "34px",
+    height: "34px",
+    borderRadius: "8px",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    color: "#888",
+    transition: "background 0.15s, color 0.15s",
+  },
+  searchWrap: {
+    padding: "8px 12px",
+    borderBottom: "1px solid #1f1f1f",
+    flexShrink: 0,
+  },
+  searchInput: {
+    width: "100%",
+    background: "#1a1a1a",
+    border: "1px solid #2a2a2a",
+    borderRadius: "8px",
+    color: "#e0e0e0",
+    fontSize: "13px",
+    padding: "7px 10px 7px 34px",
+    outline: "none",
+    boxSizing: "border-box",
+  },
+  searchIconWrap: {
+    position: "absolute",
+    left: "22px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    pointerEvents: "none",
+    color: "#555",
+  },
+  convListWrap: { flex: 1, overflowY: "auto", padding: "4px 0" },
+
+  /* conversation item */
+  convItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "10px 14px",
+    cursor: "pointer",
+    transition: "background 0.12s",
+    borderRadius: "0",
+    position: "relative",
+  },
+  convItemActive: { background: "#1c1c1c" },
+  avatar: {
+    width: "42px",
+    height: "42px",
+    borderRadius: "50%",
+    background: "#1e3a5f",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "14px",
+    fontWeight: 600,
+    color: "#5ba4f5",
+    flexShrink: 0,
+    position: "relative",
+  },
+  onlineDot: {
+    position: "absolute",
+    bottom: "1px",
+    right: "1px",
+    width: "10px",
+    height: "10px",
+    borderRadius: "50%",
+    background: "#22c55e",
+    border: "2px solid #111111",
+  },
+  convName: {
+    fontSize: "13.5px",
+    fontWeight: 500,
+    color: "#e8e8e8",
+    margin: 0,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  convLast: {
+    fontSize: "12px",
+    color: "#666",
+    margin: "2px 0 0",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  unreadBadge: {
+    background: "#2563eb",
+    color: "#fff",
+    fontSize: "11px",
+    fontWeight: 600,
+    borderRadius: "10px",
+    padding: "1px 6px",
+    minWidth: "18px",
+    textAlign: "center",
+    flexShrink: 0,
+  },
+
+  /* main chat area */
+  chatArea: {
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    height: "100%",
+    overflow: "hidden",
+    background: "#0d0d0d",
+    minWidth: 0,
+  },
+  chatAreaHidden: { display: "none" },
+
+  /* chat header */
+  chatHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "12px 16px",
+    background: "#111111",
+    borderBottom: "1px solid #1f1f1f",
+    flexShrink: 0,
+  },
+  peerName: {
+    fontSize: "15px",
+    fontWeight: 600,
+    color: "#f0f0f0",
+    margin: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  peerStatus: {
+    fontSize: "11.5px",
+    color: "#22c55e",
+    margin: "1px 0 0",
+  },
+  peerStatusOff: {
+    fontSize: "11.5px",
+    color: "#555",
+    margin: "1px 0 0",
+  },
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "4px",
+    marginLeft: "auto",
+  },
+
+  /* input area */
+  inputArea: {
+    background: "#111111",
+    borderTop: "1px solid #1f1f1f",
+    padding: "10px 12px 12px",
+    flexShrink: 0,
+  },
+  replyPreview: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    background: "#161b27",
+    border: "1px solid #1e2d48",
+    borderRadius: "8px",
+    padding: "6px 10px",
+    marginBottom: "8px",
+    fontSize: "12px",
+    color: "#8ab4f8",
+  },
+  inputRow: {
+    display: "flex",
+    alignItems: "flex-end",
+    gap: "8px",
+    background: "#1a1a1a",
+    border: "1px solid #2a2a2a",
+    borderRadius: "12px",
+    padding: "6px 8px",
+  },
+  textarea: {
+    flex: 1,
+    background: "transparent",
+    border: "none",
+    outline: "none",
+    color: "#e0e0e0",
+    fontSize: "13.5px",
+    lineHeight: "1.5",
+    resize: "none",
+    maxHeight: "120px",
+    minHeight: "22px",
+    padding: "2px 4px",
+    fontFamily: "inherit",
+  },
+  sendBtn: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "34px",
+    height: "34px",
+    borderRadius: "8px",
+    background: "#2563eb",
+    border: "none",
+    cursor: "pointer",
+    color: "#fff",
+    flexShrink: 0,
+    transition: "background 0.15s, opacity 0.15s",
+  },
+  sendBtnDisabled: {
+    background: "#1f1f1f",
+    color: "#444",
+    cursor: "not-allowed",
+  },
+
+  /* empty state */
+  empty: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "12px",
+    color: "#444",
+  },
+  emptyIcon: { opacity: 0.25 },
+  emptyText: { fontSize: "14px", color: "#555", margin: 0 },
+
+  /* typing */
+  typingWrap: {
+    padding: "4px 16px 8px",
+    fontSize: "12px",
+    color: "#555",
+    fontStyle: "italic",
+    flexShrink: 0,
+  },
+
+  /* back button */
+  backBtn: {
+    display: "none",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "34px",
+    height: "34px",
+    borderRadius: "8px",
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+    color: "#888",
+    flexShrink: 0,
+  },
+};
+
+/* ─── helpers ────────────────────────────────────────────────────────────── */
+function getInitials(name = "") {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+/* ─── component ──────────────────────────────────────────────────────────── */
 export default function Chat() {
-  const { user, token } = useAuth();
+  const { user, token, friendRequestCount, clearUnreadBadge } = useAuth();
   const { startCall } = useCall();
   const navigate = useNavigate();
   const { conversationId } = useParams();
+
+  useEffect(() => {
+    clearUnreadBadge?.();
+  }, [conversationId, clearUnreadBadge]);
 
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -47,7 +370,6 @@ export default function Chat() {
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [showFriends, setShowFriends] = useState(false);
-  const [friendRequestCount, setFriendRequestCount] = useState(0);
   const [matchingMessageIds, setMatchingMessageIds] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
   const [showSearch, setShowSearch] = useState(false);
@@ -56,11 +378,15 @@ export default function Chat() {
   const [unreadCounts, setUnreadCounts] = useState({});
   const [e2eeReady, setE2eeReady] = useState(false);
   const [typingUsers, setTypingUsers] = useState(new Set());
+  const [isSending, setIsSending] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);          // ← debounce flag
 
   const conversationIdRef = useRef(conversationId);
   conversationIdRef.current = conversationId;
   const conversationsRef = useRef(conversations);
   conversationsRef.current = conversations;
+  const textareaRef = useRef(null);
 
   const sharedSecretsRef = useRef({});
   const pendingSecretsRef = useRef({});
@@ -68,15 +394,18 @@ export default function Chat() {
   const socketRef = useRef(null);
   const messageCounterRef = useRef(0);
   const decryptedTextCache = useRef({});
+  const sendingRef = useRef(false);
 
   const activeConversation = conversations.find((c) => c._id === conversationId);
 
   function otherParticipant(conversation) {
     return (
-      conversation?.participants?.find((p) => p._id !== user?.id) ?? conversation?.participants?.[0]
+      conversation?.participants?.find((p) => p._id !== user?.id) ??
+      conversation?.participants?.[0]
     );
   }
 
+  /* ─── e2ee ──────────────────────────────────────────────────────────────── */
   async function initE2EE() {
     try {
       setCurrentUser(user.id);
@@ -102,109 +431,80 @@ export default function Chat() {
               body: JSON.stringify({ publicKey: pubKey }),
               token,
             });
-          } catch {
-            // server might reject if unchanged, ignore
-          }
+          } catch {}
         }
       }
       setE2eeReady(true);
     } catch (err) {
       console.error("E2EE init failed", err);
-      toast.error("Encryption setup failed. Messages will not be encrypted.");
+      toast.error("Encryption setup failed.");
     }
   }
 
   async function getSharedSecret(peerId) {
-    if (pendingSecretsRef.current[peerId]) {
-      return pendingSecretsRef.current[peerId];
-    }
-
+    if (pendingSecretsRef.current[peerId]) return pendingSecretsRef.current[peerId];
     const promise = (async () => {
       try {
         let peerPubKey = peerPublicKeysRef.current[peerId];
         const indexKey = [user.id, peerId].sort().join(":");
-
         if (peerPubKey) {
-          const cacheKey = [user.id, peerId, peerPubKey].join(":");
-          if (sharedSecretsRef.current[cacheKey]) return sharedSecretsRef.current[cacheKey];
-
-          const [cachedSecret, cachedPubKey] = await Promise.all([
+          const ck = [user.id, peerId, peerPubKey].join(":");
+          if (sharedSecretsRef.current[ck]) return sharedSecretsRef.current[ck];
+          const [cs, cp] = await Promise.all([
             getKey(`sharedSecret:${indexKey}`, user.id),
             getKey(`sharedSecretPubKey:${indexKey}`, user.id),
           ]);
-          if (cachedSecret && cachedPubKey === peerPubKey) {
-            sharedSecretsRef.current[cacheKey] = cachedSecret;
-            return cachedSecret;
-          }
+          if (cs && cp === peerPubKey) { sharedSecretsRef.current[ck] = cs; return cs; }
         } else {
-          const [cachedSecret, cachedPubKey] = await Promise.all([
+          const [cs, cp] = await Promise.all([
             getKey(`sharedSecret:${indexKey}`, user.id),
             getKey(`sharedSecretPubKey:${indexKey}`, user.id),
           ]);
-          if (cachedSecret && cachedPubKey) {
-            peerPublicKeysRef.current[peerId] = cachedPubKey;
-            const cacheKey = [user.id, peerId, cachedPubKey].join(":");
-            sharedSecretsRef.current[cacheKey] = cachedSecret;
-            return cachedSecret;
+          if (cs && cp) {
+            peerPublicKeysRef.current[peerId] = cp;
+            const ck = [user.id, peerId, cp].join(":");
+            sharedSecretsRef.current[ck] = cs;
+            return cs;
           }
         }
-
         if (!peerPubKey) {
           const res = await api(`/users/${peerId}/public-key`, { token });
           peerPubKey = res.publicKey;
-          if (!peerPubKey) {
-            toast.error(`User has no public key — messages won't be encrypted`);
-            return null;
-          }
+          if (!peerPubKey) { toast.error("User has no public key"); return null; }
           peerPublicKeysRef.current[peerId] = peerPubKey;
         }
-
-        const cacheKey = [user.id, peerId, peerPubKey].join(":");
-        if (sharedSecretsRef.current[cacheKey]) return sharedSecretsRef.current[cacheKey];
-
-        const [cachedSecret, cachedPubKey] = await Promise.all([
+        const ck = [user.id, peerId, peerPubKey].join(":");
+        if (sharedSecretsRef.current[ck]) return sharedSecretsRef.current[ck];
+        const [cs, cp] = await Promise.all([
           getKey(`sharedSecret:${indexKey}`, user.id),
           getKey(`sharedSecretPubKey:${indexKey}`, user.id),
         ]);
-        if (cachedSecret && cachedPubKey === peerPubKey) {
-          sharedSecretsRef.current[cacheKey] = cachedSecret;
-          return cachedSecret;
-        }
-
+        if (cs && cp === peerPubKey) { sharedSecretsRef.current[ck] = cs; return cs; }
         const privKey = await getKey(PRIVATE_KEY_FN(user.id), user.id);
-        if (!privKey) {
-          toast.error("Your encryption key is missing. Re-login to generate a new one.");
-          return null;
-        }
+        if (!privKey) { toast.error("Encryption key missing. Re-login."); return null; }
         const secret = deriveSharedSecret(privKey, peerPubKey);
-        sharedSecretsRef.current[cacheKey] = secret;
+        sharedSecretsRef.current[ck] = secret;
         await Promise.all([
           storeKey(`sharedSecret:${indexKey}`, secret, user.id),
           storeKey(`sharedSecretPubKey:${indexKey}`, peerPubKey, user.id),
         ]);
         return secret;
       } catch (err) {
-        console.error("Failed to get shared secret", err);
+        console.error("getSharedSecret:", err);
         return null;
       }
     })();
-
     pendingSecretsRef.current[peerId] = promise;
-    try {
-      return await promise;
-    } finally {
-      delete pendingSecretsRef.current[peerId];
-    }
+    try { return await promise; } finally { delete pendingSecretsRef.current[peerId]; }
   }
 
+  /* ─── effects ────────────────────────────────────────────────────────────── */
   useEffect(() => {
     if (user?.id) initE2EE();
     requestNotificationPermission();
   }, [user?.id]);
 
-  useEffect(() => {
-    loadConversations();
-  }, []);
+  useEffect(() => { loadConversations(); }, []);
 
   useEffect(() => {
     if (conversationId) {
@@ -214,118 +514,60 @@ export default function Chat() {
   }, [conversationId]);
 
   useEffect(() => {
-    if (activeConversation?.pinned) {
-      setPinnedMessages(activeConversation.pinned);
-    } else {
-      setPinnedMessages([]);
-    }
+    setPinnedMessages(activeConversation?.pinned ?? []);
   }, [activeConversation?.pinned]);
 
+  /* ─── socket ─────────────────────────────────────────────────────────────── */
   useEffect(() => {
     const s = connectSocket(token);
     socketRef.current = s;
 
-    s.on("userOnline", ({ userId }) => {
-      setOnlineUsers((prev) => new Set(prev).add(userId));
+    s.on("userOnline", ({ userId }) => setOnlineUsers((p) => new Set(p).add(userId)));
+    s.on("userOffline", ({ userId }) =>
+      setOnlineUsers((p) => { const n = new Set(p); n.delete(userId); return n; })
+    );
+    s.on("friendRequestAccepted", () => toast.success("Friend request accepted!"));
+    s.on("messagePinned", () => loadConversations());
+    s.on("messageUnpinned", () => loadConversations());
+    s.on("messageDeleted", ({ messageId }) =>
+      setMessages((p) => p.map((m) => m._id === messageId ? { ...m, deletedAt: new Date().toISOString() } : m))
+    );
+    s.on("conversationRead", ({ conversationId: cid }) =>
+      setMessages((p) => p.map((m) => m.conversationId === cid && m.senderId !== user?.id ? { ...m, read: true } : m))
+    );
+    s.on("typing:start", ({ userId: uid }) => {
+      if (uid === user?.id) return;
+      setTypingUsers((p) => { const n = new Set(p); n.add(uid); return n; });
     });
-    s.on("userOffline", ({ userId }) => {
-      setOnlineUsers((prev) => {
-        const next = new Set(prev);
-        next.delete(userId);
-        return next;
-      });
-    });
-    s.on("friendRequestReceived", ({ senderName }) => {
-      setFriendRequestCount((c) => c + 1);
-      showNotification("Friend Request", {
-        body: `${senderName || "Someone"} sent you a friend request`,
-      });
-    });
-    s.on("friendRequestAccepted", () => {
-      toast.success("Friend request accepted!");
-    });
-    s.on("messagePinned", ({ messageId }) => {
-      loadConversations();
-    });
-    s.on("messageUnpinned", ({ messageId }) => {
-      loadConversations();
-    });
-    s.on("messageDeleted", ({ messageId }) => {
-      setMessages((prev) =>
-        prev.map((m) => (m._id === messageId ? { ...m, deletedAt: new Date().toISOString() } : m)),
-      );
-    });
-    s.on("conversationRead", ({ conversationId: cid }) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.conversationId === cid && m.senderId !== user?.id ? { ...m, read: true } : m,
-        ),
-      );
-    });
-
-    s.on("typing:start", ({ userId: typingUserId, userName }) => {
-      if (typingUserId === user?.id) return;
-      setTypingUsers((prev) => {
-        const next = new Set(prev);
-        next.add(typingUserId);
-        return next;
-      });
-    });
-
-    s.on("typing:stop", ({ userId: typingUserId }) => {
-      setTypingUsers((prev) => {
-        const next = new Set(prev);
-        next.delete(typingUserId);
-        return next;
-      });
-    });
-
-    function onMessage(msg) {
-      if (msg.conversationId !== conversationId && msg.senderId !== user?.id) {
-        playMessageSound();
-        showNotification("New message", {
-          body: msg.body || "Encrypted message",
-          onClick: () => navigate(`/chat/${msg.conversationId}`),
-        });
-      }
+    s.on("typing:stop", ({ userId: uid }) =>
+      setTypingUsers((p) => { const n = new Set(p); n.delete(uid); return n; })
+    );
+    s.on("message", (msg) => {
       setMessages((prev) => {
         if (prev.some((m) => m._id === msg._id)) return prev;
-        if (msg.conversationId === conversationId) {
+        if (msg.conversationId === conversationIdRef.current) {
           markMessageDelivered(msg._id);
           return [...prev, msg];
         }
         return prev;
       });
-      setConversations((prev) => {
-        const existing = prev.find((c) => c._id === msg.conversationId);
-        if (existing) {
-          return prev.map((c) => (c._id === msg.conversationId ? { ...c, lastMessage: msg } : c));
-        }
-        return prev;
-      });
-      if (msg.conversationId !== conversationId) {
-        setUnreadCounts((prev) => ({
-          ...prev,
-          [msg.conversationId]: (prev[msg.conversationId] || 0) + 1,
-        }));
-      }
-    }
-    s.on("message", onMessage);
-
+      setConversations((p) => p.map((c) => c._id === msg.conversationId ? { ...c, lastMessage: msg } : c));
+      if (msg.conversationId !== conversationIdRef.current)
+        setUnreadCounts((p) => ({ ...p, [msg.conversationId]: (p[msg.conversationId] || 0) + 1 }));
+    });
     s.emit("online");
 
     return () => {
-      s.off("userOnline");
-      s.off("userOffline");
-      s.off("conversationRead");
-      s.off("message", onMessage);
-      s.off("typing:start");
-      s.off("typing:stop");
+      s.off("userOnline"); s.off("userOffline"); s.off("conversationRead");
+      s.off("message"); s.off("typing:start"); s.off("typing:stop");
+      s.off("messagePinned"); s.off("messageUnpinned");
+      s.off("messageDeleted"); s.off("friendRequestAccepted");
       setTypingUsers(new Set());
       s.emit("offline");
     };
-  }, [token, conversationId]);
+  }, [token]);
 
+  /* ─── data loaders ────────────────────────────────────────────────────────── */
   async function loadConversations() {
     try {
       const data = await api("/conversations", { token });
@@ -336,59 +578,190 @@ export default function Chat() {
         if (uc > 0) counts[c._id] = uc;
       }
       setUnreadCounts(counts);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
+    } catch {} finally { setLoading(false); }
   }
 
-  async function loadMessages(id) {
+  async function loadMessages(id, before) {
     try {
-      const data = await api(`/messages/${id}`, { token });
-      setMessages(data.messages ?? []);
-      decryptedTextCache.current = {};
-      setMatchingMessageIds(null);
-      setMessageSearchQuery("");
-    } catch {
-      setMessages([]);
-    }
+      const params = new URLSearchParams();
+      if (before) params.set("before", before);
+      const qs = params.toString();
+      const data = await api(`/messages/${id}${qs ? `?${qs}` : ""}`, { token });
+      const msgs = data.messages ?? [];
+      setMessages((prev) => {
+        if (!before) return msgs;
+        const existing = new Set(prev.map((m) => m._id));
+        return [...msgs.filter((m) => !existing.has(m._id)), ...prev];
+      });
+      if (!before) setHasMore(data.hasMore !== false);
+      else setHasMore(data.hasMore !== false);
+      if (!before) {
+        decryptedTextCache.current = {};
+        setMatchingMessageIds(null);
+        setMessageSearchQuery("");
+      }
+    } catch { setMessages([]); }
+  }
+
+  async function loadOlderMessages() {
+    if (!conversationId || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const oldest = messages[0]?._id;
+    if (!oldest) { setLoadingMore(false); return; }
+    const prev = messages.length;
+    await loadMessages(conversationId, oldest);
+    setLoadingMore(false);
   }
 
   async function markConversationRead(cid) {
     try {
       await api(`/conversations/${cid}/read`, { method: "PATCH", token });
-      setUnreadCounts((prev) => ({ ...prev, [cid]: 0 }));
+      setUnreadCounts((p) => ({ ...p, [cid]: 0 }));
       const s = socketRef.current;
-      if (s) {
-        s.emit("markRead", { conversationId: cid });
-        s.emit("joinConversation", cid);
-      }
-    } catch {
-      // ignore
-    }
+      if (s) { s.emit("markRead", { conversationId: cid }); s.emit("joinConversation", cid); }
+    } catch {}
   }
 
   async function markMessageDelivered(msgId) {
+    try { await api(`/messages/${msgId}/delivered`, { method: "PATCH", token }); } catch {}
+  }
+
+  /* ─── decrypt ────────────────────────────────────────────────────────────── */
+  const handleDecryptMessage = useCallback(
+    async (message) => {
+      if (!e2eeReady) return "…";
+      if (!message.encryptedPayload) return message.body || "";
+      if (!message.iv || !message.authTag) return "⚠️ Decryption failed";
+      const counter = message.metadata?.counter ?? 0;
+      let peerId = message.senderId;
+      if (message.senderId === user?.id) {
+        let peer = otherParticipant(activeConversation);
+        if (!peer) {
+          const fc = conversationsRef.current.find((c) => c._id === message.conversationId);
+          peer = otherParticipant(fc);
+        }
+        if (!peer) return message.body || "";
+        peerId = peer._id;
+      }
+      const secret = await getSharedSecret(peerId);
+      if (!secret) return "⚠️ Cannot decrypt — key unavailable";
+      try {
+        return await decryptMessage(secret, message.encryptedPayload, message.iv, message.authTag, message.conversationId, counter);
+      } catch {
+        if (peerPublicKeysRef.current[peerId]) {
+          delete peerPublicKeysRef.current[peerId];
+          const staleKey = [user.id, peerId].sort().join(":");
+          await Promise.all([removeKey(`sharedSecret:${staleKey}`, user.id), removeKey(`sharedSecretPubKey:${staleKey}`, user.id)]);
+          const retrySecret = await getSharedSecret(peerId);
+          if (retrySecret) {
+            try { return await decryptMessage(retrySecret, message.encryptedPayload, message.iv, message.authTag, message.conversationId, counter); } catch {}
+          }
+        }
+        return "⚠️ Decryption failed";
+      }
+    },
+    [user?.id, e2eeReady, activeConversation]
+  );
+
+  const handleDecryptAttachment = useCallback(
+    async (message, att) => {
+      if (!e2eeReady || !att.fileIv || !att.fileAuthTag) return att.url;
+      const counter = message.metadata?.counter ?? 0;
+      let peerId = message.senderId;
+      if (message.senderId === user?.id) {
+        let peer = otherParticipant(activeConversation);
+        if (!peer) { const fc = conversationsRef.current.find((c) => c._id === message.conversationId); peer = otherParticipant(fc); }
+        if (!peer) return null;
+        peerId = peer._id;
+      }
+      const secret = await getSharedSecret(peerId);
+      if (!secret) return null;
+      const base64Part = att.url.split(",")[1];
+      if (!base64Part) return null;
+      const b64url = base64Part.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      const tryDecrypt = async (s) => URL.createObjectURL(await decryptFile(s, b64url, att.fileIv, att.fileAuthTag, message.conversationId, counter));
+      try { return await tryDecrypt(secret); } catch {
+        if (peerPublicKeysRef.current[peerId]) {
+          delete peerPublicKeysRef.current[peerId];
+          const sk = [user.id, peerId].sort().join(":");
+          await Promise.all([removeKey(`sharedSecret:${sk}`, user.id), removeKey(`sharedSecretPubKey:${sk}`, user.id)]);
+          const rs = await getSharedSecret(peerId);
+          if (rs) { try { return await tryDecrypt(rs); } catch {} }
+        }
+        return null;
+      }
+    },
+    [user?.id, e2eeReady, activeConversation]
+  );
+
+  /* ─── send (with debounce/lock) ───────────────────────────────────────────── */
+  async function handleSend() {
+    if (sendingRef.current || !body.trim() || !conversationId) return;
+    sendingRef.current = true;
+    setIsSending(true);
+
+    const plaintext = body.trim();
+    const counter = ++messageCounterRef.current;
+    const tempId = `temp-${counter}`;
+    const replyToId = replyTarget?._id;
+
+    setBody("");
+    setReplyTarget(null);
+    setMessages((prev) => [
+      ...prev,
+      {
+        _id: tempId,
+        body: plaintext,
+        senderId: user.id,
+        conversationId,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    const peer = otherParticipant(activeConversation);
+    const secret = peer ? await getSharedSecret(peer._id) : null;
+
     try {
-      await api(`/messages/${msgId}/delivered`, { method: "PATCH", token });
-    } catch {
-      // ignore
+      const payload = { conversationId, replyTo: replyToId || undefined };
+      if (secret) {
+        const enc = await encryptMessage(secret, plaintext, conversationId, counter);
+        payload.encryptedPayload = enc.encryptedPayload;
+        payload.iv = enc.iv;
+        payload.authTag = enc.authTag;
+        payload.metadata = { counter };
+      } else {
+        payload.body = plaintext;
+      }
+      const response = await api("/messages", { method: "POST", body: JSON.stringify(payload), token });
+      setMessages((prev) =>
+        prev.map((m) => (m._id === tempId ? { ...response.message, body: plaintext } : m)),
+      );
+      textareaRef.current?.focus();
+    } catch (err) {
+      console.error("sendMessage:", err.message);
+      setMessages((prev) => prev.filter((m) => m._id !== tempId));
+      toast.error("Failed to send message");
+    } finally {
+      sendingRef.current = false;
+      setIsSending(false);
     }
   }
 
+  function handleKeyDown(e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }
+
+  /* ─── search ──────────────────────────────────────────────────────────────── */
   async function handleSearch(q) {
     setSearchQuery(q);
-    if (!q.trim()) {
-      setSearchResults([]);
-      return;
-    }
+    if (!q.trim()) { setSearchResults([]); return; }
     try {
       const data = await api(`/users/search?q=${encodeURIComponent(q)}`, { token });
       setSearchResults(data.users ?? []);
-    } catch {
-      setSearchResults([]);
-    }
+    } catch { setSearchResults([]); }
   }
 
   async function startConversation(targetUserId) {
@@ -398,177 +771,77 @@ export default function Chat() {
         body: JSON.stringify({ participants: [user.id, targetUserId] }),
         token,
       });
-      setShowSearch(false);
-      setSearchQuery("");
-      setSearchResults([]);
+      setShowSearch(false); setSearchQuery(""); setSearchResults([]);
       loadConversations();
       navigate(`/chat/${data.conversation._id}`);
     } catch (err) {
-      console.error("startConversation:", err.message);
       toast.error("Failed to start conversation");
     }
   }
 
-  async function handleSend() {
-    if (!body.trim() || !conversationId) return;
-
-    const plaintext = body.trim();
-    const peer = otherParticipant(activeConversation);
-    const secret = peer ? await getSharedSecret(peer._id) : null;
-    const counter = ++messageCounterRef.current;
-
+  async function handleSendFriendRequest(recipientId) {
     try {
-      let response;
-      const payload = {
-        conversationId,
-        replyTo: replyTarget?._id || undefined,
-      };
-      if (secret) {
-        const encrypted = await encryptMessage(secret, plaintext, conversationId, counter);
-        payload.encryptedPayload = encrypted.encryptedPayload;
-        payload.iv = encrypted.iv;
-        payload.authTag = encrypted.authTag;
-        payload.metadata = { counter };
-      } else {
-        payload.body = plaintext;
-      }
-      response = await api("/messages", {
-        method: "POST",
-        body: JSON.stringify(payload),
-        token,
-      });
-      setMessages((prev) => {
-        const newMsg = { ...response.message, body: plaintext };
-        return prev.some((m) => m._id === response.message._id)
-          ? prev.map((m) => (m._id === response.message._id ? newMsg : m))
-          : [...prev, newMsg];
-      });
-      setBody("");
-      setReplyTarget(null);
-    } catch (err) {
-      console.error("sendMessage:", err.message);
-      toast.error("Failed to send message");
-    }
+      await api("/friends/request", { method: "POST", body: JSON.stringify({ recipientId }), token });
+      toast.success("Friend request sent");
+    } catch { toast.error("Failed to send friend request"); }
   }
 
-  function handleForwardClick(msg) {
-    setForwardTarget(msg);
-  }
-
-  async function handleForwardSend(targetConversationId) {
-    const msg = forwardTarget;
-    if (!msg) return;
-
-    const targetConv = conversations.find((c) => c._id === targetConversationId);
-    const peer = targetConv?.participants?.find((p) => p._id !== user.id) ?? targetConv?.participants?.[0];
-    if (!peer) {
-      toast.error("Cannot forward — no peer found");
-      return;
-    }
-
-    let text = decryptedTextCache.current[msg._id];
-    if (text === undefined) {
-      try {
-        text = await handleDecryptMessage(msg);
-      } catch {
-        text = msg.body || "";
-      }
-      decryptedTextCache.current[msg._id] = text;
-    }
-    if (!text) {
-      toast.error("Cannot forward encrypted media");
-      setForwardTarget(null);
-      return;
-    }
-
-    const secret = await getSharedSecret(peer._id);
-    const counter = ++messageCounterRef.current;
-
-    try {
-      const payload = { conversationId: targetConversationId, forwardedFrom: msg._id };
-      if (secret && msg.encryptedPayload) {
-        const encrypted = await encryptMessage(secret, text, targetConversationId, counter);
-        payload.encryptedPayload = encrypted.encryptedPayload;
-        payload.iv = encrypted.iv;
-        payload.authTag = encrypted.authTag;
-        payload.metadata = { counter };
-      } else {
-        payload.body = text;
-      }
-      await api("/messages", { method: "POST", body: JSON.stringify(payload), token });
-      toast.success("Message forwarded");
-    } catch (err) {
-      console.error("forwardMessage:", err.message);
-      toast.error("Failed to forward message");
-    }
-    setForwardTarget(null);
-  }
-
+  /* ─── other actions ───────────────────────────────────────────────────────── */
   function handleReply(msg) {
     const peer = otherParticipant(activeConversation);
     const senderName = msg.senderId === user.id ? "You" : peer?.profile?.name || "User";
     setReplyTarget({ ...msg, senderName });
   }
 
-  async function handleMessageSearch(query) {
-    setMessageSearchQuery(query);
-    if (!query.trim()) {
-      setMatchingMessageIds(null);
-      return;
-    }
-
-    const q = query.toLowerCase();
-    const matched = new Set();
-
-    for (const msg of messages) {
-      if (msg.deletedAt) continue;
-      let text = decryptedTextCache.current[msg._id];
-      if (text === undefined) {
-        if (msg.encryptedPayload) {
-          try {
-            text = await handleDecryptMessage(msg);
-          } catch {
-            text = "";
-          }
-        } else {
-          text = msg.body || "";
-        }
-        decryptedTextCache.current[msg._id] = text;
-      }
-      if (text && text.toLowerCase().includes(q)) {
-        matched.add(msg._id);
-      }
-    }
-    setMatchingMessageIds(matched);
+  async function handleDelete(msg) {
+    if (!msg._id) return;
+    try {
+      await api(`/messages/${msg._id}/delete`, { method: "POST", token });
+      setMessages((p) => p.map((m) => m._id === msg._id ? { ...m, deletedAt: new Date().toISOString() } : m));
+    } catch { toast.error("Failed to delete message"); }
   }
 
-  async function handleSendFriendRequest(recipientId) {
+  async function handlePin(msg) {
+    if (!conversationId || !msg._id) return;
+    const isPinned = pinnedMessages.some((p) => (p.messageId?._id || p.messageId) === msg._id);
     try {
-      await api("/friends/request", {
-        method: "POST",
-        body: JSON.stringify({ recipientId }),
-        token,
-      });
-      toast.success("Friend request sent");
-    } catch (err) {
-      console.error("addFriend:", err.message);
-      toast.error("Failed to send friend request");
+      await api(`/conversations/${conversationId}/${isPinned ? "unpin" : "pin"}/${msg._id}`, { method: "PATCH", token });
+      loadConversations();
+    } catch { toast.error("Failed to pin message"); }
+  }
+
+  async function handleForwardSend(targetConversationId) {
+    const msg = forwardTarget;
+    if (!msg) return;
+    const targetConv = conversations.find((c) => c._id === targetConversationId);
+    const peer = targetConv?.participants?.find((p) => p._id !== user.id) ?? targetConv?.participants?.[0];
+    if (!peer) { toast.error("Cannot forward — no peer found"); return; }
+    let text = decryptedTextCache.current[msg._id];
+    if (text === undefined) {
+      try { text = await handleDecryptMessage(msg); } catch { text = msg.body || ""; }
+      decryptedTextCache.current[msg._id] = text;
     }
+    if (!text) { toast.error("Cannot forward encrypted media"); setForwardTarget(null); return; }
+    const secret = await getSharedSecret(peer._id);
+    const counter = ++messageCounterRef.current;
+    try {
+      const payload = { conversationId: targetConversationId, forwardedFrom: msg._id };
+      if (secret && msg.encryptedPayload) {
+        const enc = await encryptMessage(secret, text, targetConversationId, counter);
+        payload.encryptedPayload = enc.encryptedPayload; payload.iv = enc.iv; payload.authTag = enc.authTag; payload.metadata = { counter };
+      } else { payload.body = text; }
+      await api("/messages", { method: "POST", body: JSON.stringify(payload), token });
+      toast.success("Message forwarded");
+    } catch { toast.error("Failed to forward message"); }
+    setForwardTarget(null);
   }
 
   async function handleSetDisappear(duration) {
     if (!conversationId) return;
     try {
-      await api(`/conversations/${conversationId}/disappear`, {
-        method: "PATCH",
-        body: JSON.stringify({ duration }),
-        token,
-      });
+      await api(`/conversations/${conversationId}/disappear`, { method: "PATCH", body: JSON.stringify({ duration }), token });
       loadConversations();
-    } catch (err) {
-      console.error("setDisappear:", err.message);
-      toast.error("Failed to update disappearing messages");
-    }
+    } catch { toast.error("Failed to update disappearing messages"); }
   }
 
   async function handleClearHistory() {
@@ -576,39 +849,25 @@ export default function Chat() {
     try {
       await api(`/conversations/${conversationId}/clear`, { method: "POST", token });
       setMessages([]);
-    } catch (err) {
-      console.error("clearHistory:", err.message);
-      toast.error("Failed to clear history");
-    }
+    } catch { toast.error("Failed to clear history"); }
   }
 
-  async function handlePin(msg) {
-    if (!conversationId || !msg._id) return;
-    const isPinned = pinnedMessages.some((p) => (p.messageId?._id || p.messageId) === msg._id);
-    try {
-      if (isPinned) {
-        await api(`/conversations/${conversationId}/unpin/${msg._id}`, { method: "PATCH", token });
-      } else {
-        await api(`/conversations/${conversationId}/pin/${msg._id}`, { method: "PATCH", token });
+  async function handleMessageSearch(query) {
+    setMessageSearchQuery(query);
+    if (!query.trim()) { setMatchingMessageIds(null); return; }
+    const q = query.toLowerCase();
+    const matched = new Set();
+    for (const msg of messages) {
+      if (msg.deletedAt) continue;
+      let text = decryptedTextCache.current[msg._id];
+      if (text === undefined) {
+        if (msg.encryptedPayload) { try { text = await handleDecryptMessage(msg); } catch { text = ""; } }
+        else { text = msg.body || ""; }
+        decryptedTextCache.current[msg._id] = text;
       }
-      loadConversations();
-    } catch (err) {
-      console.error("pinMessage:", err.message);
-      toast.error("Failed to pin message");
+      if (text && text.toLowerCase().includes(q)) matched.add(msg._id);
     }
-  }
-
-  async function handleDelete(msg) {
-    if (!msg._id) return;
-    try {
-      await api(`/messages/${msg._id}/delete`, { method: "POST", token });
-      setMessages((prev) =>
-        prev.map((m) => (m._id === msg._id ? { ...m, deletedAt: new Date().toISOString() } : m)),
-      );
-    } catch (err) {
-      console.error("deleteMessage:", err.message);
-      toast.error("Failed to delete message");
-    }
+    setMatchingMessageIds(matched);
   }
 
   const emitTyping = useCallback((isTyping) => {
@@ -617,229 +876,73 @@ export default function Chat() {
     socketRef.current.emit(isTyping ? "typing:start" : "typing:stop", { conversationId: cid });
   }, []);
 
-  const handleDecryptAttachment = useCallback(
-    async (message, att) => {
-      if (!e2eeReady || !att.fileIv || !att.fileAuthTag) return att.url;
-      const counter = message.metadata?.counter ?? 0;
-
-      let peerId = message.senderId;
-      if (message.senderId === user?.id) {
-        let peer = otherParticipant(activeConversation);
-        if (!peer) {
-          const fallbackConv = conversationsRef.current.find((c) => c._id === message.conversationId);
-          peer = otherParticipant(fallbackConv);
-        }
-        if (!peer) return null;
-        peerId = peer._id;
-      }
-
-      const secret = await getSharedSecret(peerId);
-      if (!secret) return null;
-
-      const base64Part = att.url.split(",")[1];
-      if (!base64Part) return null;
-      const base64urlPayload = base64Part
-        .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-
-      async function decryptWithSecret(s) {
-        return URL.createObjectURL(
-          await decryptFile(
-            s, base64urlPayload, att.fileIv, att.fileAuthTag,
-            message.conversationId, counter,
-          ),
-        );
-      }
-
-      try {
-        return await decryptWithSecret(secret);
-      } catch (err) {
-        if (peerPublicKeysRef.current[peerId]) {
-          delete peerPublicKeysRef.current[peerId];
-          const staleIndexKey = [user.id, peerId].sort().join(":");
-          await Promise.all([
-            removeKey(`sharedSecret:${staleIndexKey}`, user.id),
-            removeKey(`sharedSecretPubKey:${staleIndexKey}`, user.id),
-          ]);
-          const retrySecret = await getSharedSecret(peerId);
-          if (retrySecret) {
-            try {
-              return await decryptWithSecret(retrySecret);
-            } catch {}
-          }
-        }
-        return null;
-      }
-    },
-    [user?.id, e2eeReady, activeConversation],
-  );
-
-  const handleDecryptMessage = useCallback(
-    async (message) => {
-      if (!e2eeReady) return "...";
-      if (!message.encryptedPayload) return message.body || "";
-
-      if (!message.iv || !message.authTag) {
-        console.debug("missing iv or authTag for encrypted message", { msgId: message._id });
-        return "⚠️ Decryption failed";
-      }
-
-      const counter = message.metadata?.counter ?? 0;
-
-      let peerId = message.senderId;
-      if (message.senderId === user?.id) {
-        let peer = otherParticipant(activeConversation);
-        if (!peer) {
-          const fallbackConv = conversationsRef.current.find((c) => c._id === message.conversationId);
-          peer = otherParticipant(fallbackConv);
-        }
-        if (!peer) return message.body || "";
-        peerId = peer._id;
-      }
-
-      const secret = await getSharedSecret(peerId);
-      if (!secret) return "⚠️ Cannot decrypt — key unavailable";
-
-      try {
-        return await decryptMessage(
-          secret,
-          message.encryptedPayload,
-          message.iv,
-          message.authTag,
-          message.conversationId,
-          counter,
-        );
-      } catch (err) {
-        if (peerPublicKeysRef.current[peerId]) {
-          delete peerPublicKeysRef.current[peerId];
-          const staleIndexKey = [user.id, peerId].sort().join(":");
-          await Promise.all([
-            removeKey(`sharedSecret:${staleIndexKey}`, user.id),
-            removeKey(`sharedSecretPubKey:${staleIndexKey}`, user.id),
-          ]);
-          const retrySecret = await getSharedSecret(peerId);
-          if (retrySecret) {
-            try {
-              return await decryptMessage(
-                retrySecret,
-                message.encryptedPayload,
-                message.iv,
-                message.authTag,
-                message.conversationId,
-                counter,
-              );
-            } catch {}
-          }
-        }
-        console.debug("decrypt error:", err, { msgId: message._id });
-        return "⚠️ Decryption failed";
-      }
-    },
-    [user?.id, e2eeReady, activeConversation],
-  );
-
   async function handleUploadFile(file, type = "file") {
     if (!conversationId) return;
-
     const peer = otherParticipant(activeConversation);
     const secret = peer ? await getSharedSecret(peer._id) : null;
     const counter = ++messageCounterRef.current;
-
     try {
-      let attachment;
-      let metadata = {};
-
+      let attachment; let metadata = {};
       if (secret) {
-        const encryptedFile = await encryptFile(secret, file, conversationId, counter);
-
-        const standardB64 = encryptedFile.encryptedPayload
-          .replace(/-/g, "+").replace(/_/g, "/");
-        const padded = standardB64.padEnd(Math.ceil(standardB64.length / 4) * 4, "=");
-        const encryptedBytes = Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
-        const encryptedBlob = new Blob([encryptedBytes], { type: "application/octet-stream" });
-
-        const formData = new FormData();
-        formData.append("file", encryptedBlob, file.name);
-        const uploadRes = await fetch(`${API_URL}/upload`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        const uploadData = await uploadRes.json();
-        if (!uploadRes.ok) throw new Error(uploadData.error || "Upload failed");
-
-        attachment = {
-          type: type === "image" ? "image" : "file",
-          url: uploadData.file.url,
-          name: file.name,
-          size: file.size,
-          fileIv: encryptedFile.iv,
-          fileAuthTag: encryptedFile.authTag,
-        };
+        const ef = await encryptFile(secret, file, conversationId, counter);
+        const stdB64 = ef.encryptedPayload.replace(/-/g, "+").replace(/_/g, "/");
+        const padded = stdB64.padEnd(Math.ceil(stdB64.length / 4) * 4, "=");
+        const bytes = Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
+        const blob = new Blob([bytes], { type: "application/octet-stream" });
+        const fd = new FormData(); fd.append("file", blob, file.name);
+        const r = await fetch(`${API_URL}/upload`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+        const d = await r.json(); if (!r.ok) throw new Error(d.error || "Upload failed");
+        attachment = { type: type === "image" ? "image" : "file", url: d.file.url, name: file.name, size: file.size, fileIv: ef.iv, fileAuthTag: ef.authTag };
         metadata = { counter };
       } else {
-        const formData = new FormData();
-        formData.append("file", file);
-        const uploadRes = await fetch(`${API_URL}/upload`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        const uploadData = await uploadRes.json();
-        if (!uploadRes.ok) throw new Error(uploadData.error || "Upload failed");
-
-        attachment = {
-          type: type === "image" ? "image" : "file",
-          url: uploadData.file.url,
-          name: uploadData.file.name,
-          size: uploadData.file.size,
-        };
+        const fd = new FormData(); fd.append("file", file);
+        const r = await fetch(`${API_URL}/upload`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+        const d = await r.json(); if (!r.ok) throw new Error(d.error || "Upload failed");
+        attachment = { type: type === "image" ? "image" : "file", url: d.file.url, name: d.file.name, size: d.file.size };
       }
-
-      const response = await api("/messages", {
-        method: "POST",
-        body: JSON.stringify({
-          conversationId,
-          attachments: [attachment],
-          metadata,
-        }),
-        token,
-      });
-      setMessages((prev) =>
-        prev.some((m) => m._id === response.message._id)
-          ? prev
-          : [...prev, response.message],
-      );
+      const response = await api("/messages", { method: "POST", body: JSON.stringify({ conversationId, attachments: [attachment], metadata }), token });
+      setMessages((p) => p.some((m) => m._id === response.message._id) ? p : [...p, response.message]);
     } catch (err) {
-      console.error("uploadFile:", err.message);
-      toast.error("Failed to upload file");
+      console.error("Upload error:", err);
+      toast.error(err?.message || "Failed to upload file");
     }
   }
 
+  /* ─── derived ────────────────────────────────────────────────────────────── */
   const peerUser = otherParticipant(activeConversation);
   const isPeerOnline = onlineUsers.has(peerUser?._id);
+  const peerName = peerUser?.profile?.name || peerUser?.username || "Unknown";
 
   const typingNames = useMemo(() => {
     if (!typingUsers.size || !activeConversation?.participants) return [];
     return [...typingUsers]
-      .map((uid) => {
-        const p = activeConversation.participants.find((part) => part._id === uid);
-        return p?.profile?.name;
-      })
+      .map((uid) => activeConversation.participants.find((p) => p._id === uid)?.profile?.name)
       .filter(Boolean);
   }, [typingUsers, activeConversation?.participants]);
+
   const displayMessages =
     matchingMessageIds && messageSearchQuery.trim()
       ? messages.filter((m) => matchingMessageIds.has(m._id))
       : messages;
 
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const showSidebar = !conversationId || !isMobile;
+  const showChat = conversationId || !isMobile;
+
+  /* ─── render ─────────────────────────────────────────────────────────────── */
   return (
-    <div className="flex h-full w-full">
-      {showFriends ? (
-        <div className="flex w-full flex-col border-r border-border md:w-80">
+    <div style={S.root}>
+      {/* ── SIDEBAR ── */}
+      <div
+        style={{
+          ...S.sidebar,
+          ...(conversationId && isMobile ? S.sidebarHidden : {}),
+        }}
+        className="chat-sidebar"
+      >
+        {showFriends ? (
           <FriendRequests onBack={() => setShowFriends(false)} />
-        </div>
-      ) : showSearch ? (
-        <div className="flex w-full flex-col border-r border-border md:w-80">
+        ) : showSearch ? (
           <AddFriend
             show={showSearch}
             onToggle={() => setShowSearch(false)}
@@ -851,85 +954,243 @@ export default function Chat() {
             onShowFriends={() => setShowFriends(true)}
             friendRequestCount={friendRequestCount}
           />
-        </div>
-      ) : (
-        <div
-          className={`flex flex-col border-r border-border ${
-            conversationId ? "hidden md:flex md:w-80" : "w-full md:w-80"
-          }`}
-        >
-          <AddFriend
-            show={showSearch}
-            onToggle={() => setShowSearch((v) => !v)}
-            searchQuery={searchQuery}
-            onSearch={handleSearch}
-            searchResults={searchResults}
-            onStartConversation={startConversation}
-            onSendFriendRequest={handleSendFriendRequest}
-            onShowFriends={() => setShowFriends(true)}
-            friendRequestCount={friendRequestCount}
-          />
-          <ConversationList
-            conversations={conversations}
-            activeId={conversationId}
-            currentUserId={user?.id}
-            onlineUsers={onlineUsers}
-            unreadCounts={unreadCounts}
-            onSelect={(id) => navigate(`/chat/${id}`)}
-            loading={loading}
-          />
-        </div>
-      )}
+        ) : (
+          <>
+            {/* Header */}
+            <div style={S.sidebarHeader}>
+              <p style={S.sidebarTitle}>Messages</p>
+              <div style={{ display: "flex", gap: "4px" }}>
+                {friendRequestCount > 0 && (
+                  <button
+                    style={{ ...S.iconBtn, position: "relative" }}
+                    onClick={() => setShowFriends(true)}
+                    title="Friend requests"
+                  >
+                    <Users size={17} />
+                    <span style={{
+                      position: "absolute", top: "4px", right: "4px",
+                      background: "#dc2626", color: "#fff", fontSize: "9px",
+                      fontWeight: 700, borderRadius: "10px", padding: "0 3px",
+                      minWidth: "14px", textAlign: "center",
+                    }}>
+                      {friendRequestCount}
+                    </span>
+                  </button>
+                )}
+                <button style={S.iconBtn} onClick={() => setShowSearch(true)} title="New message">
+                  <UserPlus size={17} />
+                </button>
+              </div>
+            </div>
 
-      <div className={`flex flex-1 flex-col ${conversationId ? "" : "hidden md:flex"}`}>
+            {/* Search bar */}
+            <div style={{ ...S.searchWrap, position: "relative" }}>
+              <span style={S.searchIconWrap}><Search size={14} /></span>
+              <input
+                style={S.searchInput}
+                placeholder="Search conversations…"
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+              />
+            </div>
+
+            {/* Conversation list */}
+            <div style={S.convListWrap}>
+              {loading ? (
+                <div style={{ padding: "24px", textAlign: "center", color: "#555", fontSize: "13px" }}>
+                  Loading…
+                </div>
+              ) : conversations.length === 0 ? (
+                <div style={{ padding: "40px 20px", textAlign: "center", color: "#555", fontSize: "13px" }}>
+                  No conversations yet.<br />
+                  <span style={{ color: "#2563eb", cursor: "pointer" }} onClick={() => setShowSearch(true)}>
+                    Start one
+                  </span>
+                </div>
+              ) : (
+                conversations.map((conv) => {
+                  const peer = conv.participants?.find((p) => p._id !== user?.id) ?? conv.participants?.[0];
+                  const name = peer?.profile?.name || peer?.username || "Unknown";
+                  const initials = getInitials(name);
+                  const isActive = conv._id === conversationId;
+                  const isOnline = onlineUsers.has(peer?._id);
+                  const unread = unreadCounts[conv._id] || 0;
+                  const lastMsg = conv.lastMessage?.body || (conv.lastMessage?.attachments?.length ? "📎 Attachment" : "");
+
+                  return (
+                    <div
+                      key={conv._id}
+                      style={{
+                        ...S.convItem,
+                        background: isActive ? "#1c1c1c" : "transparent",
+                      }}
+                      onClick={() => navigate(`/chat/${conv._id}`)}
+                      onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "#161616"; }}
+                      onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <div style={S.avatar}>
+                        {peer?.profile?.avatarUrl ? (
+                          <img src={peer.profile.avatarUrl} alt={initials} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
+                        ) : initials}
+                        {isOnline && <span style={S.onlineDot} />}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={S.convName}>{name}</p>
+                        {lastMsg && <p style={S.convLast}>{lastMsg}</p>}
+                      </div>
+                      {unread > 0 && <span style={S.unreadBadge}>{unread}</span>}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── CHAT AREA ── */}
+      <div
+        style={{
+          ...S.chatArea,
+          ...(!conversationId && isMobile ? S.chatAreaHidden : {}),
+        }}
+        className="chat-main"
+      >
         {conversationId && activeConversation ? (
           <>
             <ChatHeader
               conversation={activeConversation}
-              currentUserId={user?.id}
+              currentUserId={user.id}
               isOnline={isPeerOnline}
               onBack={() => navigate("/chat")}
-              onVoiceCall={(peerId, peerName) => startCall(peerId, "voice", peerName)}
-              onVideoCall={(peerId, peerName) => startCall(peerId, "video", peerName)}
+              onVoiceCall={(peerId, name) => startCall(peerId, "voice", name)}
+              onVideoCall={(peerId, name) => startCall(peerId, "video", name)}
               onClearHistory={handleClearHistory}
               onSearch={handleMessageSearch}
               disappearDuration={activeConversation?.disappearDuration ?? 0}
               onSetDisappear={handleSetDisappear}
             />
+
             <MessageList
               messages={displayMessages}
-              currentUserId={user?.id}
+              currentUserId={user.id}
               participants={activeConversation?.participants}
               decryptMessage={handleDecryptMessage}
               decryptAttachment={handleDecryptAttachment}
               onReply={handleReply}
               onDelete={handleDelete}
-              onPin={handlePin}
+              isSearching={!!messageSearchQuery}
               pinnedMessages={pinnedMessages}
-              isSearching={!!messageSearchQuery.trim()}
-              onForward={handleForwardClick}
+              onPin={handlePin}
+              onForward={(msg) => setForwardTarget(msg)}
+              onLoadOlder={loadOlderMessages}
+              hasMore={hasMore}
+              loadingMore={loadingMore}
             />
-            <TypingIndicator names={typingNames} />
-            <MessageInput
-              value={body}
-              onChange={setBody}
-              onSend={handleSend}
-              onUploadImage={(file) => handleUploadFile(file, "image")}
-              onUploadFile={(file) => handleUploadFile(file, "file")}
-              disabled={!e2eeReady}
-              replyTarget={replyTarget}
-              onCancelReply={() => setReplyTarget(null)}
-              onTypingChange={emitTyping}
-            />
+
+            {/* Typing indicator */}
+            {typingNames.length > 0 && (
+              <div style={S.typingWrap}>
+                {typingNames.join(", ")} {typingNames.length === 1 ? "is" : "are"} typing…
+              </div>
+            )}
+
+            {/* Message input */}
+            <div style={S.inputArea}>
+              {replyTarget && (
+                <div style={S.replyPreview}>
+                  <Reply size={14} style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {replyTarget.senderName}: {replyTarget.body || "Message"}
+                  </span>
+                  <button
+                    style={{ ...S.iconBtn, width: "20px", height: "20px", borderRadius: "4px" }}
+                    onClick={() => setReplyTarget(null)}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
+
+              <div style={S.inputRow}>
+                {/* Attach image */}
+                <label
+                  style={{ ...S.iconBtn, cursor: "pointer" }}
+                  title="Send image"
+                >
+                  <ImageIcon size={16} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleUploadFile(f, "image");
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+
+                {/* Attach file */}
+                <label
+                  style={{ ...S.iconBtn, cursor: "pointer" }}
+                  title="Attach file"
+                >
+                  <Paperclip size={16} />
+                  <input
+                    type="file"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) handleUploadFile(f, "file");
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+
+                {/* Text input */}
+                <textarea
+                  ref={textareaRef}
+                  style={S.textarea}
+                  placeholder={e2eeReady ? "Type a message…" : "Setting up encryption…"}
+                  value={body}
+                  disabled={!e2eeReady}
+                  rows={1}
+                  onChange={(e) => {
+                    setBody(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+                    emitTyping(!!e.target.value);
+                  }}
+                  onKeyDown={handleKeyDown}
+                  onBlur={() => emitTyping(false)}
+                />
+
+                {/* Send */}
+                <button
+                  style={{
+                    ...S.sendBtn,
+                    ...((!body.trim() || !e2eeReady || isSending) ? S.sendBtnDisabled : {}),
+                  }}
+                  onClick={handleSend}
+                  disabled={!body.trim() || !e2eeReady || isSending}
+                  title="Send"
+                >
+                  <Send size={15} />
+                </button>
+              </div>
+            </div>
           </>
         ) : (
-          <div className="flex h-full flex-col items-center justify-center p-8 text-center max-md:hidden">
-            <MessageCircle className="mb-4 size-12 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">Select a conversation to start chatting</p>
+          /* Empty state */
+          <div style={S.empty}>
+            <MessageCircle size={48} style={S.emptyIcon} color="#888" />
+            <p style={S.emptyText}>Select a conversation to start chatting</p>
           </div>
         )}
       </div>
 
+      {/* Forward dialog */}
       {forwardTarget && (
         <ForwardDialog
           conversations={conversations}
@@ -938,6 +1199,31 @@ export default function Chat() {
           onClose={() => setForwardTarget(null)}
         />
       )}
+
+      {/* Responsive CSS */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap');
+
+        * { box-sizing: border-box; }
+
+        .chat-sidebar::-webkit-scrollbar,
+        .chat-main::-webkit-scrollbar { width: 4px; }
+        .chat-sidebar::-webkit-scrollbar-track,
+        .chat-main::-webkit-scrollbar-track { background: transparent; }
+        .chat-sidebar::-webkit-scrollbar-thumb,
+        .chat-main::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
+
+        @media (max-width: 768px) {
+          .chat-sidebar {
+            width: 100% !important;
+            min-width: 100% !important;
+            display: ${conversationId ? "none" : "flex"} !important;
+          }
+          .chat-main {
+            display: ${conversationId ? "flex" : "none"} !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

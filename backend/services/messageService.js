@@ -1,24 +1,31 @@
 import { Message } from '../models/Message.js';
 import { Conversation } from '../models/Conversation.js';
 
-export async function getConversationMessages(conversationId, limit = 50, userId = null) {
+export async function getConversationMessages(conversationId, limit = 50, userId = null, before = null) {
   const filter = { conversationId };
+  if (before) {
+    const ref = await Message.findById(before).select('createdAt').lean();
+    if (ref) filter.createdAt = { ...(filter.createdAt || {}), $lt: ref.createdAt };
+  }
   if (userId) {
     const conv = await Conversation.findById(conversationId).select('clearedHistoryAt').lean();
     const clearedAt = conv?.clearedHistoryAt?.[userId];
     if (clearedAt) {
-      filter.createdAt = { $gt: clearedAt };
+      filter.createdAt = { ...(filter.createdAt || {}), $gt: clearedAt };
     }
   }
-  return Message.find(filter)
+  const messages = await Message.find(filter)
     .sort({ createdAt: -1 })
-    .limit(limit)
+    .limit(limit + 1)
     .populate({
       path: 'replyTo',
       select: 'senderId body encryptedPayload iv authTag metadata createdAt',
       populate: { path: 'senderId', select: 'profile.name' },
     })
     .lean();
+  const hasMore = messages.length > limit;
+  if (hasMore) messages.pop();
+  return { messages, hasMore };
 }
 
 export async function createMessage(messagePayload) {

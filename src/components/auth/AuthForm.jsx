@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import { Eye, EyeOff } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { loginSchema, signupSchema } from "@/lib/schemas";
@@ -11,6 +12,7 @@ export function AuthForm({ mode }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [handle, setHandle] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -46,7 +48,9 @@ export function AuthForm({ mode }) {
       }
       setSession(data.accessToken, data.user);
       toast.success("Welcome back");
-      navigate(data.user.onboardingComplete ? "/chat" : "/onboarding");
+      const redirectPath = sessionStorage.getItem("redirect_after_login");
+      sessionStorage.removeItem("redirect_after_login");
+      navigate(redirectPath || (data.user.onboardingComplete ? "/chat" : "/onboarding"));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
       setError(msg);
@@ -94,14 +98,29 @@ export function AuthForm({ mode }) {
                 autoComplete="username"
               />
             )}
-            <Field
-              label="Password"
-              type="password"
-              value={password}
-              onChange={setPassword}
-              placeholder={isSignup ? "8 characters or more" : "••••••••"}
-              autoComplete={isSignup ? "new-password" : "current-password"}
-            />
+            <label className="block">
+              <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Password
+              </span>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={isSignup ? "8 characters or more" : "••••••••"}
+                  autoComplete={isSignup ? "new-password" : "current-password"}
+                  className="w-full rounded-xl border border-border bg-background/50 px-4 py-3 pr-10 text-sm outline-none transition-colors focus:border-brand"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  tabIndex={-1}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+            </label>
 
             {error && (
               <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">

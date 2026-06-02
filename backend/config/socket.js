@@ -10,7 +10,13 @@ import { initializeWebrtcSocket } from '../sockets/webrtcSocket.js';
 export function createSocketServer(server) {
   const io = new Server(server, {
     cors: {
-      origin: env.frontendOrigin,
+      origin(origin, callback) {
+        if (!origin || env.corsWhitelist.includes('*') || env.corsWhitelist.includes(origin)) {
+          callback(null, true);
+          return;
+        }
+        callback(new Error('CORS policy violation'));
+      },
       methods: ['GET', 'POST'],
       credentials: true,
     },

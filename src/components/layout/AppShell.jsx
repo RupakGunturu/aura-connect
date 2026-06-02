@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { disconnectSocket } from "@/lib/socket";
 
 export function AppShell({ children }) {
-  const { user, logout } = useAuth();
+  const { user, logout, friendRequestCount } = useAuth();
   const navigate = useNavigate();
   const pathname = useLocation().pathname;
 
@@ -44,13 +44,18 @@ export function AppShell({ children }) {
               key={item.label}
               to={item.to}
               title={item.label}
-              className={`grid size-10 place-items-center rounded-xl transition-colors ${
+              className={`relative grid size-10 place-items-center rounded-xl transition-colors ${
                 active
                   ? "bg-card text-foreground ring-1 ring-border"
                   : "text-muted-foreground hover:bg-card/60 hover:text-foreground"
               }`}
             >
               <item.icon className="size-4" />
+              {item.label === "Chat" && friendRequestCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white">
+                  {friendRequestCount > 9 ? "9+" : friendRequestCount}
+                </span>
+              )}
             </Link>
           );
         })}
@@ -74,12 +79,17 @@ export function AppShell({ children }) {
       <nav className="fixed bottom-0 left-0 right-0 z-20 flex items-center justify-around border-t border-border bg-background/80 px-4 py-2 backdrop-blur-md md:hidden">
         <Link
           to="/chat"
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] ${
+          className={`relative flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] ${
             pathname.startsWith("/chat") ? "text-foreground" : "text-muted-foreground"
           }`}
         >
           <MessageCircle className="size-5" />
           <span>Chat</span>
+          {friendRequestCount > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white">
+              {friendRequestCount > 9 ? "9+" : friendRequestCount}
+            </span>
+          )}
         </Link>
         <Link
           to="/calls"

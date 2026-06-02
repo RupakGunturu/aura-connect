@@ -13,7 +13,7 @@ export function getSocket(token: string): Socket {
   currentToken = token;
   socket = io(SOCKET_URL, {
     auth: { token },
-    transports: ["websocket"],
+    transports: ["polling", "websocket"],
     autoConnect: true,
   });
   return socket;

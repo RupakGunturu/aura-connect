@@ -36,6 +36,10 @@ export default function ChatHeader({
     conversation?.participants?.find((p) => p._id !== currentUserId) ??
     conversation?.participants?.[0];
 
+  if (typeof window !== "undefined" && other) {
+    console.debug("[ChatHeader] other profile:", other.profile?.name, "avatarUrl:", other.profile?.avatarUrl ? other.profile.avatarUrl.slice(0, 60) + "…" : "none");
+  }
+
   function handleSearchChange(q) {
     setSearchQuery(q);
     onSearch?.(q);

@@ -1,13 +1,16 @@
 import { MessageCircle, ChevronDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
+import { useState } from "react";
+
 function Avatar({ user, size = "md" }) {
+  const [imgError, setImgError] = useState(false);
   const sizeMap = { sm: "size-8 text-xs", md: "size-10 text-sm", lg: "size-12 text-base" };
   const avatarUrl = user?.profile?.avatarUrl;
   const handle = user?.profile?.handle ?? "?";
   const cls = `grid shrink-0 place-items-center rounded-full bg-card font-semibold uppercase ring-1 ring-border ${sizeMap[size]}`;
-  if (avatarUrl) {
-    return <img src={avatarUrl} alt={handle} className={`${cls} object-cover`} />;
+  if (avatarUrl && !imgError) {
+    return <img src={avatarUrl} alt={handle} className={`${cls} object-cover`} onError={() => setImgError(true)} />;
   }
   return <div className={cls}>{handle.slice(0, 2)}</div>;
 }

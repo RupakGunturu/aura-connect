@@ -3,8 +3,9 @@ import { requireFields } from '../utils/validation.js';
 
 export async function listMessages(req, res, next) {
   try {
-    const messages = await getConversationMessages(req.params.conversationId, Number(req.query.limit) || 50, req.user.id);
-    res.status(200).json({ messages });
+    const { before } = req.query;
+    const result = await getConversationMessages(req.params.conversationId, Number(req.query.limit) || 50, req.user.id, before);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }

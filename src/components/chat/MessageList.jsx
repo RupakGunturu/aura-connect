@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Pin } from "lucide-react";
 import MessageBubble from "./MessageBubble";
 
-export default function MessageList({ messages, currentUserId, participants, decryptMessage, decryptAttachment, onReply, onDelete, isSearching, pinnedMessages, onPin, onForward }) {
+export default function MessageList({ messages, currentUserId, participants, decryptMessage, decryptAttachment, onReply, onDelete, isSearching, pinnedMessages, onPin, onForward, onLoadOlder, hasMore, loadingMore }) {
   const endRef = useRef(null);
 
   useEffect(() => {
@@ -47,6 +47,17 @@ export default function MessageList({ messages, currentUserId, participants, dec
         </div>
       )}
       <div className="space-y-3">
+          {hasMore && (
+            <div className="flex justify-center py-2">
+              <button
+                onClick={onLoadOlder}
+                disabled={loadingMore}
+                className="rounded-full border border-border bg-card px-4 py-1.5 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+              >
+                {loadingMore ? "Loading…" : "Load older messages"}
+              </button>
+            </div>
+          )}
           {[...messages]
             .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
             .map((msg) => {

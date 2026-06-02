@@ -2,6 +2,22 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Check, CheckCheck, File, Reply, Trash2, Forward, Pin } from "lucide-react";
 
+function useIntersection(ref) {
+  const [isVisible, setIsVisible] = useState(true);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setIsVisible(true); obs.disconnect(); } },
+      { rootMargin: "200px" },
+    );
+    obs.observe(el);
+    setIsVisible(el.getBoundingClientRect().top < window.innerHeight + 200);
+    return () => obs.disconnect();
+  }, [ref]);
+  return isVisible;
+}
+
 function DisappearTimer({ expiresAt, isOwn }) {
   const [remaining, setRemaining] = useState("");
 
@@ -32,9 +48,9 @@ function DisappearTimer({ expiresAt, isOwn }) {
 }
 
 function ReadStatus({ delivered, read }) {
-  if (read) return <CheckCheck className="size-3 text-brand" />;
-  if (delivered) return <CheckCheck className="size-3 text-muted-foreground" />;
-  return <Check className="size-3 text-muted-foreground" />;
+  if (read) return <CheckCheck className="size-4 shrink-0 text-blue-400" />;
+  if (delivered) return <CheckCheck className="size-4 shrink-0 text-foreground/60" />;
+  return <Check className="size-4 shrink-0 text-muted-foreground/70" />;
 }
 
 export default function MessageBubble({ message, isOwn, sender, decryptMessage, decryptAttachment, onReply, onDelete, onPin, isPinned, onForward }) {
@@ -43,8 +59,12 @@ export default function MessageBubble({ message, isOwn, sender, decryptMessage, 
   const [replyPreview, setReplyPreview] = useState(null);
   const [replySenderName, setReplySenderName] = useState("");
   const [attachmentObjectUrls, setAttachmentObjectUrls] = useState({});
+  const [failedAttachments, setFailedAttachments] = useState(new Set());
+  const [senderImgError, setSenderImgError] = useState(false);
   const blobUrlsRef = useRef({});
   const longPressRef = useRef(null);
+  const bubbleRef = useRef(null);
+  const isVisible = useIntersection(bubbleRef);
 
   function handleContextMenu(e) {
     if (!onDelete || !isOwn || isDeleted) return;
@@ -73,18 +93,20 @@ export default function MessageBubble({ message, isOwn, sender, decryptMessage, 
   }, []);
 
   useEffect(() => {
-    if (!message.encryptedPayload) return;
+    if (!message.encryptedPayload || !isVisible) return;
     decryptMessage(message).then((text) => setDecryptedBody(text));
-  }, [message, isOwn, decryptMessage]);
+  }, [message, isOwn, decryptMessage, isVisible]);
 
   useEffect(() => {
-    if (!message.attachments?.length || !decryptAttachment) return;
+    if (!message.attachments?.length || !decryptAttachment || !isVisible) return;
     let active = true;
 
+    const failed = new Set();
     Promise.all(
       message.attachments.map(async (att, i) => {
         if (!att.fileIv) return [i, null];
         const url = await decryptAttachment(message, att);
+        if (!url) failed.add(i);
         return [i, url];
       }),
     ).then((results) => {
@@ -95,6 +117,7 @@ export default function MessageBubble({ message, isOwn, sender, decryptMessage, 
       });
       blobUrlsRef.current = newUrls;
       setAttachmentObjectUrls(newUrls);
+      setFailedAttachments(failed);
     }).catch(() => {});
 
     return () => {
@@ -104,10 +127,10 @@ export default function MessageBubble({ message, isOwn, sender, decryptMessage, 
       });
       blobUrlsRef.current = {};
     };
-  }, [message, decryptAttachment]);
+  }, [message, decryptAttachment, isVisible]);
 
   useEffect(() => {
-    if (!message.replyTo || typeof message.replyTo !== "object") return;
+    if (!message.replyTo || typeof message.replyTo !== "object" || !isVisible) return;
     const rep = message.replyTo;
     setReplySenderName(rep.senderId?.profile?.name ?? rep.senderId?._id ?? "Unknown");
     if (rep.encryptedPayload) {
@@ -118,7 +141,7 @@ export default function MessageBubble({ message, isOwn, sender, decryptMessage, 
     } else {
       setReplyPreview(rep.body || "📎 Media");
     }
-  }, [message.replyTo, decryptMessage]);
+  }, [message.replyTo, decryptMessage, isVisible]);
 
   const isDeleted = message.deletedAt;
   const displayText = isDeleted
@@ -143,6 +166,7 @@ export default function MessageBubble({ message, isOwn, sender, decryptMessage, 
 
   return (
     <motion.div
+      ref={bubbleRef}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
@@ -154,8 +178,8 @@ export default function MessageBubble({ message, isOwn, sender, decryptMessage, 
     >
       {!isOwn && (
         <div className="mb-0.5 size-7 shrink-0 overflow-hidden rounded-full ring-1 ring-border">
-          {sender?.profile?.avatarUrl ? (
-            <img src={sender.profile.avatarUrl} alt="" className="size-full object-cover" />
+          {sender?.profile?.avatarUrl && !senderImgError ? (
+            <img src={sender.profile.avatarUrl} alt="" className="size-full object-cover" onError={() => setSenderImgError(true)} />
           ) : (
             <div className="grid size-full place-items-center bg-card text-[10px] font-semibold uppercase">
               {sender?.profile?.handle?.slice(0, 2) ?? "?"}
@@ -192,17 +216,56 @@ export default function MessageBubble({ message, isOwn, sender, decryptMessage, 
         )}
         {showText && <p className="whitespace-pre-wrap break-words">{displayText}</p>}
 
-        {message.attachments?.map((att, i) =>
-          att.type === "image" ? (
+        {message.attachments?.map((att, i) => {
+          const isEncrypted = !!att.fileIv;
+          const urlOk = attachmentObjectUrls[i];
+          const decryptFailed = isEncrypted && failedAttachments.has(i);
+          const decryptPending = isEncrypted && !urlOk && !decryptFailed;
+
+          if (decryptFailed) {
+            return (
+              <div
+                key={i}
+                className={`mt-2 flex items-center gap-2 rounded-xl p-2 ${
+                  isOwn ? "bg-foreground/10" : "bg-background/50"
+                }`}
+              >
+                <File className="size-8 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium">{att.name}</p>
+                  <p className="text-[10px] text-muted-foreground">Decryption failed</p>
+                </div>
+              </div>
+            );
+          }
+
+          if (decryptPending) {
+            return (
+              <div
+                key={i}
+                className={`mt-2 flex items-center gap-2 rounded-xl p-2 ${
+                  isOwn ? "bg-foreground/10" : "bg-background/50"
+                }`}
+              >
+                <File className="size-8 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium">{att.name}</p>
+                  <p className="text-[10px] text-muted-foreground">Decrypting…</p>
+                </div>
+              </div>
+            );
+          }
+
+          return att.type === "image" ? (
             <a
               key={i}
-              href={attachmentObjectUrls[i] || att.url}
+              href={urlOk}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-2 block"
             >
               <img
-                src={attachmentObjectUrls[i] || att.url}
+                src={urlOk}
                 alt={att.name}
                 className="max-h-72 w-full rounded-xl object-cover"
               />
@@ -220,15 +283,15 @@ export default function MessageBubble({ message, isOwn, sender, decryptMessage, 
                 <p className="text-[10px] text-muted-foreground">{(att.size / 1024).toFixed(1)} KB</p>
               </div>
               <a
-                href={attachmentObjectUrls[i] || att.url}
+                href={urlOk}
                 download={att.name}
                 className="shrink-0 text-[10px] underline underline-offset-2 hover:text-brand"
               >
                 Open
               </a>
             </div>
-          )
-        )}
+          );
+        })}
 
         <div
           className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${

@@ -70,8 +70,10 @@ export function showNotification(title, options = {}) {
 
   try {
     const notif = new Notification(title, {
-      icon: "/vite.svg",
-      badge: "/vite.svg",
+      icon: "/favicon.png",
+      badge: "/favicon.png",
+      tag: "securechat",
+      renotify: true,
       ...options,
     });
 

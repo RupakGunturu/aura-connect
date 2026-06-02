@@ -29,17 +29,26 @@ export default function FriendRequests({ onBack }) {
   }
 
   async function handleAccept(requestId) {
-    await api(`/friends/request/${requestId}/accept`, { method: "PATCH", token });
+    setIncoming((prev) => prev.filter((r) => r._id !== requestId));
+    try {
+      await api(`/friends/request/${requestId}/accept`, { method: "PATCH", token });
+    } catch { /* will be corrected by reload */ }
     loadAll();
   }
 
   async function handleReject(requestId) {
-    await api(`/friends/request/${requestId}/reject`, { method: "PATCH", token });
+    setIncoming((prev) => prev.filter((r) => r._id !== requestId));
+    try {
+      await api(`/friends/request/${requestId}/reject`, { method: "PATCH", token });
+    } catch { /* will be corrected by reload */ }
     loadAll();
   }
 
   async function handleRemove(friendId) {
-    await api(`/friends/${friendId}`, { method: "DELETE", token });
+    setFriends((prev) => prev.filter((f) => f._id !== friendId));
+    try {
+      await api(`/friends/${friendId}`, { method: "DELETE", token });
+    } catch { /* will be corrected by reload */ }
     loadAll();
   }
 
