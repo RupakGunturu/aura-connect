@@ -27,6 +27,7 @@ async function startServer() {
       logger.info(`Socket connected: ${socket.id} user=${socket.user?.id ?? 'unknown'}`);
     });
   } catch (error) {
+    console.error('Backend failed to start:', error && (error.stack || error));
     logger.error('Backend failed to start', error);
     process.exit(1);
   }
