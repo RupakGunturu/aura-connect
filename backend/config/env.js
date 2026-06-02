@@ -7,11 +7,10 @@ const __dirname = path.dirname(__filename);
 
 const envResult = dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 if (envResult.error) {
-  console.warn('No .env file found — relying on Vercel environment variables');
+  console.warn('No .env file found — relying on platform environment variables');
 }
 
 const required = [
-  'NODE_ENV',
   'PORT',
   'MONGO_URI',
   'JWT_ACCESS_SECRET',
@@ -25,6 +24,7 @@ for (const key of required) {
   }
 }
 
+process.env.NODE_ENV ||= 'production';
 process.env.FRONTEND_ORIGIN ||= 'http://localhost:5173';
 process.env.CORS_WHITELIST ||= 'http://localhost:5173,http://localhost:5174';
 process.env.ACCESS_TOKEN_TTL ||= '15m';
