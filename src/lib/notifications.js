@@ -7,6 +7,18 @@ function getAudioCtx() {
   return audioCtx;
 }
 
+function resumeAudio() {
+  const ctx = getAudioCtx();
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+  }
+}
+
+if (typeof document !== "undefined") {
+  const onInteraction = () => { resumeAudio(); document.removeEventListener("click", onInteraction); };
+  document.addEventListener("click", onInteraction, { once: true });
+}
+
 function playTone(frequency, duration, type = "sine") {
   try {
     const ctx = getAudioCtx();
@@ -26,10 +38,12 @@ function playTone(frequency, duration, type = "sine") {
 }
 
 export function playMessageSound() {
+  resumeAudio();
   playTone(800, 0.1, "sine");
 }
 
 export function playCallRingtone() {
+  resumeAudio();
   try {
     const ctx = getAudioCtx();
     function ring() {
@@ -53,15 +67,26 @@ export function playCallRingtone() {
 }
 
 export function playFriendRequestSound() {
+  resumeAudio();
   playTone(600, 0.15, "triangle");
   setTimeout(() => playTone(900, 0.15, "triangle"), 200);
 }
 
-export function requestNotificationPermission() {
-  if (!("Notification" in window)) return;
-  if (Notification.permission === "default") {
-    Notification.requestPermission();
+export async function requestNotificationPermission() {
+  if (!("Notification" in window)) return "unsupported";
+  if (Notification.permission === "granted") return "granted";
+  if (Notification.permission === "denied") return "denied";
+  try {
+    const result = await Notification.requestPermission();
+    return result;
+  } catch {
+    return "denied";
   }
+}
+
+export function getNotificationPermission() {
+  if (!("Notification" in window)) return "unsupported";
+  return Notification.permission;
 }
 
 export function showNotification(title, options = {}) {

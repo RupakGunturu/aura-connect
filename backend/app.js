@@ -20,6 +20,7 @@ import privacyRoutes from './routes/privacyRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import friendRoutes from './routes/friendRoutes.js';
 import iceRoutes from './routes/iceRoutes.js';
+import pushRoutes from './routes/pushRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,6 +50,7 @@ app.use('/api/privacy', privacyRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/ice-servers', iceRoutes);
+app.use('/api/push', pushRoutes);
 
 app.use(errorHandler);
 

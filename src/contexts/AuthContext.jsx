@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
 import { API_URL, setRefreshHandler, setOnRefreshFail } from "@/lib/api";
 import { getSocket, disconnectSocket } from "@/lib/socket";
-import { showNotification, playMessageSound, playFriendRequestSound } from "@/lib/notifications";
+import { showNotification } from "@/lib/notifications";
+import { registerPush, unregisterPush } from "@/lib/pushManager";
 
 const SESSION_FLAG = "session_active";
 
@@ -118,7 +119,6 @@ export function AuthProvider({ children }) {
       setFriendRequestCount((c) => c + 1);
       unreadBadge++;
       updateBadge();
-      playFriendRequestSound();
       showNotification("Friend Request", { body: "Someone sent you a friend request", tag: "friend-request", renotify: true });
     };
 
@@ -128,7 +128,6 @@ export function AuthProvider({ children }) {
       if (!viewing) {
         unreadBadge++;
         updateBadge();
-        playMessageSound();
         showNotification("New message", {
           body: msg.body || "Encrypted message",
           tag: `msg-${msg.conversationId}`,
@@ -148,6 +147,11 @@ export function AuthProvider({ children }) {
       s.off("message", onMessage);
     };
   }, [token, user?.id]);
+
+  useEffect(() => {
+    if (token) registerPush(token);
+    else unregisterPush();
+  }, [token]);
 
   const logout = useCallback(async () => {
     fetch(`${API_URL}/auth/logout`, {

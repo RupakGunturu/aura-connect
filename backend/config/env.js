@@ -37,6 +37,9 @@ process.env.RATE_LIMIT_WINDOW_MS ||= '900000';
 process.env.RATE_LIMIT_MAX ||= '150';
 process.env.SECURE_COOKIE ||= 'true';
 
+process.env.VAPID_PUBLIC_KEY ||= 'BDUDSJ9roVpx8Sf-4vRvLkphWEVQe14rY4zhcWTx5Z-Ms90gP1ISIFOx8yK_9kAM_j2loms0-wy3kDsLceKceU8';
+process.env.VAPID_PRIVATE_KEY ||= '_ktCQghC1FoXvLRLCzyhcFmhiOI7-7mLLm6gxqUz4hU';
+
 export const env = {
   nodeEnv: process.env.NODE_ENV,
   port: Number(process.env.PORT),
@@ -54,4 +57,6 @@ export const env = {
   turnUrl: process.env.TURN_URL || '',
   turnUsername: process.env.TURN_USERNAME || '',
   turnCredential: process.env.TURN_CREDENTIAL || '',
+  vapidPublicKey: process.env.VAPID_PUBLIC_KEY,
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY,
 };

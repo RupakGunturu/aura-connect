@@ -14,7 +14,14 @@ export default defineConfig({
     tailwindcss(),
     tsconfigPaths(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       registerType: "autoUpdate",
+      devOptions: {
+        enabled: true,
+        type: 'module',
+      },
       includeAssets: ["favicon.png"],
       manifest: {
         name: "SecureChat",
@@ -25,8 +32,7 @@ export default defineConfig({
         display: "standalone",
         start_url: "/",
         icons: [
-          { src: "/favicon.png", sizes: "192x192", type: "image/png" },
-          { src: "/favicon.png", sizes: "512x512", type: "image/png" },
+          { src: "/favicon.png", sizes: "414x380", type: "image/png" },
         ],
       },
       workbox: {

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -15,10 +16,13 @@ import Calls from "./pages/Calls";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import NotFound from "./pages/NotFound";
+import { requestNotificationPermission } from "@/lib/notifications";
 
 const queryClient = new QueryClient();
 
-const App = () => (
+const App = () => {
+  useEffect(() => { requestNotificationPermission(); }, []);
+  return (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <CallProvider>
@@ -95,6 +99,6 @@ const App = () => (
       </CallProvider>
     </AuthProvider>
   </QueryClientProvider>
-);
-
+  );
+};
 export default App;

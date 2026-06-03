@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { api } from "@/lib/api";
 import { getSocket } from "@/lib/socket";
 import { useAuth } from "@/contexts/AuthContext";
-import { playCallRingtone, showNotification } from "@/lib/notifications";
+import { showNotification } from "@/lib/notifications";
 
 const CallContext = createContext(null);
 
@@ -53,7 +53,6 @@ export function CallProvider({ children }) {
 
     function onIncoming(payload) {
       setIncomingCall(payload);
-      playCallRingtone();
       showNotification("Incoming Call", {
         body: `${payload.callerName || "Someone"} is calling (${payload.type})`,
         onClick: () => window.focus(),

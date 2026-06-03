@@ -1,4 +1,5 @@
 import { createMessage, getConversationMessages, markMessageDelivered, markMessageRead, softDeleteMessage } from '../services/messageService.js';
+import { notifyOfflineParticipants } from '../services/pushService.js';
 import { requireFields } from '../utils/validation.js';
 
 export async function listMessages(req, res, next) {
@@ -32,6 +33,7 @@ export async function sendMessage(req, res, next) {
     const io = req.app.get('io');
     if (io) {
       io.to(`conversation:${message.conversationId}`).emit('message', message);
+      notifyOfflineParticipants(io, message, req.user.id, req.user.profile?.name);
     }
 
     res.status(201).json({ message });
