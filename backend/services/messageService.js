@@ -17,11 +17,8 @@ export async function getConversationMessages(conversationId, limit = 50, userId
   const messages = await Message.find(filter)
     .sort({ createdAt: -1 })
     .limit(limit + 1)
-    .populate({
-      path: 'replyTo',
-      select: 'senderId body encryptedPayload iv authTag metadata createdAt',
-      populate: { path: 'senderId', select: 'profile.name' },
-    })
+    .populate('replyTo', 'senderId body createdAt')
+    .select('conversationId senderId body encryptedPayload iv authTag attachments replyTo metadata createdAt updatedAt delivered read deletedAt disappearsAt')
     .lean();
   const hasMore = messages.length > limit;
   if (hasMore) messages.pop();

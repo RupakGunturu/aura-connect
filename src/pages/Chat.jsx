@@ -263,7 +263,7 @@ const S = {
   },
   inputRow: {
     display: "flex",
-    alignItems: "flex-end",
+    alignItems: "center",
     gap: "8px",
     background: "#1a1a1a",
     border: "1px solid #2a2a2a",
@@ -416,19 +416,22 @@ export default function Chat() {
   async function initE2EE() {
     try {
       setCurrentUser(user.id);
+      setE2eeReady(true);
       const storedUserId = await getKey(USER_ID_KEY, user.id);
       if (storedUserId !== user.id) {
         sharedSecretsRef.current = {};
         await clearAllKeys();
         const kp = generateKeyPair();
-        await storeKey(USER_ID_KEY, user.id, user.id);
-        await storeKey(PRIVATE_KEY_FN(user.id), kp.privateKey, user.id);
-        await storeKey(PUBLIC_KEY_FN(user.id), kp.publicKey, user.id);
-        await api("/users/me/public-key", {
-          method: "PUT",
-          body: JSON.stringify({ publicKey: kp.publicKey }),
-          token,
-        });
+        await Promise.all([
+          storeKey(USER_ID_KEY, user.id, user.id),
+          storeKey(PRIVATE_KEY_FN(user.id), kp.privateKey, user.id),
+          storeKey(PUBLIC_KEY_FN(user.id), kp.publicKey, user.id),
+          api("/users/me/public-key", {
+            method: "PUT",
+            body: JSON.stringify({ publicKey: kp.publicKey }),
+            token,
+          }),
+        ]);
       } else {
         const pubKey = await getKey(PUBLIC_KEY_FN(user.id), user.id);
         if (pubKey) {
@@ -441,10 +444,8 @@ export default function Chat() {
           } catch {}
         }
       }
-      setE2eeReady(true);
     } catch (err) {
       console.error("E2EE init failed", err);
-      toast.error("Encryption setup failed.");
     }
   }
 
