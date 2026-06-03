@@ -11,8 +11,6 @@ import {
   Key,
   Smartphone,
   Ban,
-  Phone,
-  Video,
   Mail,
   LogOut,
   Trash2,
@@ -20,6 +18,7 @@ import {
   Loader,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
@@ -161,34 +160,6 @@ function ToggleField({ label, description, checked, onChange }) {
           }`}
         />
       </button>
-    </div>
-  );
-}
-
-function ConfirmModal({ open, title, message, confirmLabel, onConfirm, onCancel, destructive }) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="glass-card w-full max-w-sm rounded-3xl border border-border p-6 shadow-2xl">
-        <h3 className="text-lg font-semibold">{title}</h3>
-        <p className="mt-2 text-sm text-muted-foreground">{message}</p>
-        <div className="mt-6 flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 rounded-2xl border border-border py-2.5 text-sm font-semibold transition-colors hover:bg-card/60"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className={`flex-1 rounded-2xl py-2.5 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-[1.01] ${
-              destructive ? "bg-red-600 shadow-red-600/20" : "bg-brand shadow-brand/10"
-            }`}
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -438,7 +409,7 @@ export default function Profile() {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-lg space-y-6 p-6 pb-24 md:pb-6">
+    <div className="mx-auto w-full max-w-lg space-y-6 p-6 pb-32 md:pb-6">
         <div className="glass-card rounded-3xl border border-border p-8 shadow-2xl">
           <div className="flex flex-col items-center text-center">
             <Skeleton className="mb-4 size-20 rounded-full" />
@@ -474,7 +445,7 @@ export default function Profile() {
   });
 
   return (
-    <div className="mx-auto w-full max-w-lg space-y-6 p-6 pb-24 md:pb-6">
+    <div className="mx-auto w-full max-w-lg space-y-6 p-6 pb-32 md:pb-6">
       {/* Profile Header */}
       <div className="glass-card rounded-3xl border border-border p-8 shadow-2xl">
         <div className="flex flex-col items-center text-center">
@@ -727,28 +698,6 @@ export default function Profile() {
             </div>
           </Section>
 
-          {/* Communication */}
-          <Section title="Communication" icon={Phone}>
-            <ToggleField
-              label="Allow Voice Calls"
-              description="Let others start voice calls with you"
-              checked={display.settings?.allowVoiceCalls ?? true}
-              onChange={(v) => saveSetting("allowVoiceCalls", v)}
-            />
-            <ToggleField
-              label="Allow Video Calls"
-              description="Let others start video calls with you"
-              checked={display.settings?.allowVideoCalls ?? true}
-              onChange={(v) => saveSetting("allowVideoCalls", v)}
-            />
-            <ToggleField
-              label="Show Online Status"
-              description="Let others see when you are online"
-              checked={display.settings?.showOnlineStatus ?? true}
-              onChange={(v) => saveSetting("showOnlineStatus", v)}
-            />
-          </Section>
-
           {/* Account */}
           <Section title="Account" icon={Mail}>
             <div className="rounded-xl border border-border bg-background/50 px-4 py-3">
@@ -772,6 +721,7 @@ export default function Profile() {
               <span>Delete Account</span>
             </button>
           </Section>
+          <div className="h-20 md:h-0" />
         </>
       )}
 

@@ -1,106 +1,301 @@
-import { useState, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
-import { Check, CheckCheck, File, Reply, Trash2, Forward, Pin } from "lucide-react";
+import { useState, useEffect, useRef, memo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Check,
+  CheckCheck,
+  File,
+  Reply,
+  Trash2,
+  Forward,
+  Pin,
+  Clock,
+  AlertCircle,
+  Download,
+} from "lucide-react";
 
+/* ─────────────────────────────────────────────
+   Inline styles — full dark-only design system
+   ───────────────────────────────────────────── */
+const ds = {
+  // Palette
+  surface: "#111214",
+  surfaceRaised: "#18191d",
+  surfaceBorder: "rgba(255,255,255,0.07)",
+  surfaceHover: "rgba(255,255,255,0.05)",
+
+  ownBubble: "#1d4ed8",          // rich indigo-blue
+  ownBubbleHover: "#1e40af",
+  ownBorder: "rgba(96,165,250,0.25)",
+
+  otherBubble: "#1e2027",
+  otherBorder: "rgba(255,255,255,0.08)",
+
+  text: "#f0f2f5",
+  textMuted: "rgba(240,242,245,0.5)",
+  textFaint: "rgba(240,242,245,0.3)",
+
+  brandAccent: "#3b82f6",
+  readBlue: "#60a5fa",
+  destructive: "#ef4444",
+  destructiveDim: "rgba(239,68,68,0.12)",
+
+  replyBarOwn: "rgba(255,255,255,0.25)",
+  replyBarOther: "#3b82f6",
+
+  avatarBg: "#2a2d35",
+  pinColor: "#facc15",
+
+  radius: {
+    bubble: "18px",
+    bubbleTailOwn: "18px 4px 18px 18px",
+    bubbleTailOther: "4px 18px 18px 18px",
+    pill: "999px",
+    sm: "10px",
+    xs: "7px",
+  },
+
+  font: {
+    body: "'SF Pro Text', 'Segoe UI', system-ui, sans-serif",
+    mono: "'SF Mono', 'Fira Code', monospace",
+  },
+};
+
+/* ─── Intersection observer hook ─── */
 function useIntersection(ref) {
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisible] = useState(false);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setIsVisible(true); obs.disconnect(); } },
-      { rootMargin: "200px" },
+      ([e]) => { if (e.isIntersecting) { setIsVisible(true); obs.disconnect(); } },
+      { rootMargin: "300px" }
     );
     obs.observe(el);
-    setIsVisible(el.getBoundingClientRect().top < window.innerHeight + 200);
+    if (el.getBoundingClientRect().top < window.innerHeight + 300) setIsVisible(true);
     return () => obs.disconnect();
   }, [ref]);
   return isVisible;
 }
 
+/* ─── Disappear timer ─── */
 function DisappearTimer({ expiresAt, isOwn }) {
-  const [remaining, setRemaining] = useState("");
-
+  const [label, setLabel] = useState("");
   useEffect(() => {
     function tick() {
       const diff = new Date(expiresAt).getTime() - Date.now();
-      if (diff <= 0) {
-        setRemaining("0s");
-        return;
-      }
-      const sec = Math.floor(diff / 1000);
-      if (sec >= 3600) setRemaining(`${Math.floor(sec / 3600)}h`);
-      else if (sec >= 60) setRemaining(`${Math.floor(sec / 60)}m`);
-      else setRemaining(`${sec}s`);
+      if (diff <= 0) { setLabel("0s"); return; }
+      const s = Math.floor(diff / 1000);
+      setLabel(s >= 3600 ? `${Math.floor(s / 3600)}h` : s >= 60 ? `${Math.floor(s / 60)}m` : `${s}s`);
     }
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [expiresAt]);
 
-  if (!remaining) return null;
-
+  if (!label) return null;
   return (
-    <div className={`mb-0.5 flex items-center gap-1 text-[10px] ${isOwn ? "text-foreground/60" : "text-muted-foreground"}`}>
-      <span className="opacity-70">⌛ {remaining}</span>
+    <div style={{
+      display: "flex", alignItems: "center", gap: 4,
+      marginBottom: 4, fontSize: 11,
+      color: isOwn ? "rgba(255,255,255,0.55)" : ds.textMuted,
+      fontFamily: ds.font.body,
+    }}>
+      <Clock size={10} strokeWidth={2} />
+      <span>{label}</span>
     </div>
   );
 }
 
+/* ─── Read receipts ─── */
 function ReadStatus({ delivered, read }) {
-  if (read) return <CheckCheck className="size-4 shrink-0 text-blue-400" />;
-  if (delivered) return <CheckCheck className="size-4 shrink-0 text-foreground/60" />;
-  return <Check className="size-4 shrink-0 text-muted-foreground/70" />;
+  if (read)
+    return <CheckCheck size={14} strokeWidth={2.2} color={ds.readBlue} style={{ flexShrink: 0 }} />;
+  if (delivered)
+    return <CheckCheck size={14} strokeWidth={2.2} color="rgba(255,255,255,0.45)" style={{ flexShrink: 0 }} />;
+  return <Check size={14} strokeWidth={2.2} color="rgba(255,255,255,0.3)" style={{ flexShrink: 0 }} />;
 }
 
-export default function MessageBubble({ message, isOwn, sender, decryptMessage, decryptAttachment, onReply, onDelete, onPin, isPinned, onForward }) {
-  const [showDeletePrompt, setShowDeletePrompt] = useState(false);
+/* ─── Confirm delete sheet (mobile-friendly bottom-anchored) ─── */
+function DeleteSheet({ onConfirm, onCancel }) {
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        style={{
+          position: "fixed", inset: 0, zIndex: 50,
+          background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
+          display: "flex", flexDirection: "column", justifyContent: "flex-end",
+        }}
+        onClick={onCancel}
+      >
+        <motion.div
+          initial={{ y: 60, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 60, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 340, damping: 30 }}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            background: "#1a1c22",
+            borderTop: "0.5px solid rgba(255,255,255,0.1)",
+            borderRadius: "16px 16px 0 0",
+            padding: "20px 16px 36px",
+          }}
+        >
+          {/* handle */}
+          <div style={{
+            width: 36, height: 4, borderRadius: 2,
+            background: "rgba(255,255,255,0.15)",
+            margin: "-8px auto 20px",
+          }} />
+          <p style={{
+            fontSize: 13, color: ds.textMuted, textAlign: "center",
+            marginBottom: 16, fontFamily: ds.font.body,
+          }}>
+            Delete this message for everyone?
+          </p>
+          <button
+            onClick={onConfirm}
+            style={{
+              width: "100%", padding: "14px",
+              background: ds.destructiveDim,
+              border: `0.5px solid ${ds.destructive}44`,
+              borderRadius: 12,
+              color: ds.destructive,
+              fontSize: 15, fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: ds.font.body,
+              marginBottom: 10,
+            }}
+          >
+            Delete message
+          </button>
+          <button
+            onClick={onCancel}
+            style={{
+              width: "100%", padding: "14px",
+              background: "rgba(255,255,255,0.05)",
+              border: "0.5px solid rgba(255,255,255,0.1)",
+              borderRadius: 12,
+              color: ds.text,
+              fontSize: 15,
+              cursor: "pointer",
+              fontFamily: ds.font.body,
+            }}
+          >
+            Cancel
+          </button>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+/* ─── Context action bar (shown on long-press / right-click) ─── */
+function ActionBar({ isOwn, onReply, onForward, onPin, onDelete, onClose }) {
+  const actions = [
+    onReply && { icon: <Reply size={16} />, label: "Reply", cb: onReply },
+    onForward && { icon: <Forward size={16} />, label: "Forward", cb: onForward },
+    onPin && { icon: <Pin size={16} />, label: "Pin", cb: onPin },
+    isOwn && onDelete && { icon: <Trash2 size={16} />, label: "Delete", cb: onDelete, danger: true },
+  ].filter(Boolean);
+
+  return (
+    <>
+      <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.88, y: 4 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.88, y: 4 }}
+        transition={{ type: "spring", stiffness: 380, damping: 28 }}
+        style={{
+          position: "absolute",
+          top: -44,
+          [isOwn ? "right" : "left"]: 0,
+          zIndex: 50,
+          display: "flex", alignItems: "center", gap: 2,
+          background: "#242630",
+          border: "0.5px solid rgba(255,255,255,0.12)",
+          borderRadius: ds.radius.pill,
+          padding: "6px 8px",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
+        }}
+      >
+        {actions.map((a) => (
+          <button
+            key={a.label}
+            title={a.label}
+            onClick={(e) => { e.stopPropagation(); a.cb(); onClose(); }}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 32, height: 32, borderRadius: "50%",
+              background: "transparent", border: "none", cursor: "pointer",
+              color: a.danger ? ds.destructive : ds.textMuted,
+              transition: "background 0.15s, color 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = a.danger ? ds.destructiveDim : ds.surfaceHover;
+              e.currentTarget.style.color = a.danger ? ds.destructive : ds.text;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+              e.currentTarget.style.color = a.danger ? ds.destructive : ds.textMuted;
+            }}
+          >
+            {a.icon}
+          </button>
+        ))}
+      </motion.div>
+    </>
+  );
+}
+
+/* ─── Main MessageBubble ─── */
+const MessageBubble = memo(function MessageBubble({
+  message, isOwn, sender,
+  decryptMessage, decryptAttachment,
+  onReply, onDelete, onPin, isPinned, onForward,
+}) {
+  const [showActions, setShowActions] = useState(false);
+  const [showDeleteSheet, setShowDeleteSheet] = useState(false);
   const [decryptedBody, setDecryptedBody] = useState(null);
   const [replyPreview, setReplyPreview] = useState(null);
   const [replySenderName, setReplySenderName] = useState("");
-  const [attachmentObjectUrls, setAttachmentObjectUrls] = useState({});
+  const [attachmentUrls, setAttachmentUrls] = useState({});
   const [failedAttachments, setFailedAttachments] = useState(new Set());
-  const [senderImgError, setSenderImgError] = useState(false);
-  const blobUrlsRef = useRef({});
+  const [avatarError, setAvatarError] = useState(false);
+  const blobRef = useRef({});
   const longPressRef = useRef(null);
   const bubbleRef = useRef(null);
   const isVisible = useIntersection(bubbleRef);
+  const isDeleted = !!message.deletedAt;
 
-  function handleContextMenu(e) {
-    if (!onDelete || !isOwn || isDeleted) return;
-    e.preventDefault();
-    setShowDeletePrompt(true);
+  /* Long-press / context menu */
+  function openActions(e) {
+    e?.preventDefault?.();
+    if (isDeleted) return;
+    setShowActions(true);
   }
-
-  function handleTouchStart() {
-    if (!onDelete || !isOwn || isDeleted) return;
-    longPressRef.current = setTimeout(() => {
-      setShowDeletePrompt(true);
-    }, 600);
+  function startLongPress() {
+    if (isDeleted) return;
+    longPressRef.current = setTimeout(() => setShowActions(true), 480);
   }
-
-  function handleTouchEnd() {
-    if (longPressRef.current) {
-      clearTimeout(longPressRef.current);
-      longPressRef.current = null;
-    }
+  function cancelLongPress() {
+    if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
   }
+  useEffect(() => () => cancelLongPress(), []);
 
-  useEffect(() => {
-    return () => {
-      if (longPressRef.current) clearTimeout(longPressRef.current);
-    };
-  }, []);
-
+  /* Decrypt body */
   useEffect(() => {
     if (!message.encryptedPayload || !isVisible) return;
-    decryptMessage(message).then((text) => setDecryptedBody(text));
-  }, [message, isOwn, decryptMessage, isVisible]);
+    decryptMessage(message).then(setDecryptedBody);
+  }, [message, decryptMessage, isVisible]);
 
+  /* Decrypt attachments */
   useEffect(() => {
     if (!message.attachments?.length || !decryptAttachment || !isVisible) return;
-    let active = true;
-
+    let alive = true;
     const failed = new Set();
     Promise.all(
       message.attachments.map(async (att, i) => {
@@ -108,237 +303,311 @@ export default function MessageBubble({ message, isOwn, sender, decryptMessage, 
         const url = await decryptAttachment(message, att);
         if (!url) failed.add(i);
         return [i, url];
-      }),
-    ).then((results) => {
-      if (!active) return;
-      const newUrls = Object.fromEntries(results.filter(([, url]) => url));
-      Object.entries(blobUrlsRef.current).forEach(([key, url]) => {
-        if (!newUrls[key] && url?.startsWith("blob:")) URL.revokeObjectURL(url);
-      });
-      blobUrlsRef.current = newUrls;
-      setAttachmentObjectUrls(newUrls);
+      })
+    ).then((res) => {
+      if (!alive) return;
+      const urls = Object.fromEntries(res.filter(([, u]) => u));
+      Object.entries(blobRef.current).forEach(([k, u]) => { if (!urls[k] && u?.startsWith("blob:")) URL.revokeObjectURL(u); });
+      blobRef.current = urls;
+      setAttachmentUrls(urls);
       setFailedAttachments(failed);
     }).catch(() => {});
-
     return () => {
-      active = false;
-      Object.values(blobUrlsRef.current).forEach((url) => {
-        if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
-      });
-      blobUrlsRef.current = {};
+      alive = false;
+      Object.values(blobRef.current).forEach((u) => { if (u?.startsWith("blob:")) URL.revokeObjectURL(u); });
+      blobRef.current = {};
     };
   }, [message, decryptAttachment, isVisible]);
 
+  /* Decrypt reply preview */
   useEffect(() => {
-    if (!message.replyTo || typeof message.replyTo !== "object" || !isVisible) return;
     const rep = message.replyTo;
+    if (!rep || typeof rep !== "object" || !isVisible) return;
     setReplySenderName(rep.senderId?.profile?.name ?? rep.senderId?._id ?? "Unknown");
     if (rep.encryptedPayload) {
-      decryptMessage({
-        ...rep,
-        senderId: rep.senderId?._id || rep.senderId,
-      }).then((text) => setReplyPreview(text && !text.startsWith("⚠️") ? text : "📎 Encrypted message"));
+      decryptMessage({ ...rep, senderId: rep.senderId?._id || rep.senderId })
+        .then((t) => setReplyPreview(t && !t.startsWith("⚠️") ? t : "🔒 Encrypted message"));
     } else {
       setReplyPreview(rep.body || "📎 Media");
     }
   }, [message.replyTo, decryptMessage, isVisible]);
 
-  const isDeleted = message.deletedAt;
-  const displayText = isDeleted
-    ? ""
-    : (message.encryptedPayload ? (decryptedBody ?? "...") : message.body || "");
-  const showText = displayText && !displayText.startsWith("⚠️");
+  const rawText = isDeleted ? "" : (message.encryptedPayload ? (decryptedBody ?? "…") : message.body || "");
+  const displayText = rawText.startsWith("⚠️") ? null : rawText;
+  const time = new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-  const time = new Date(message.createdAt).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
+  /* ── Deleted state ── */
   if (isDeleted && isOwn) {
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[85%] md:max-w-[75%] rounded-2xl border border-border bg-card/30 px-4 py-2 text-sm text-muted-foreground">
-          <p className="italic">You deleted this message</p>
+      <div style={{ display: "flex", justifyContent: "flex-end", padding: "1px 0" }}>
+        <div style={{
+          fontSize: 13, fontStyle: "italic",
+          color: ds.textFaint,
+          fontFamily: ds.font.body,
+          padding: "6px 14px",
+          background: "rgba(255,255,255,0.03)",
+          border: "0.5px solid rgba(255,255,255,0.07)",
+          borderRadius: ds.radius.bubble,
+        }}>
+          You deleted this message
         </div>
       </div>
     );
   }
 
+  const bubbleRadius = isOwn ? ds.radius.bubbleTailOwn : ds.radius.bubbleTailOther;
+  const avatarInitials = sender?.profile?.handle?.slice(0, 2)?.toUpperCase() ?? "?";
+
   return (
     <motion.div
       ref={bubbleRef}
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
-      className={`group flex items-end gap-2 ${isOwn ? "justify-end" : "justify-start"}`}
-      onContextMenu={handleContextMenu}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchMove={handleTouchEnd}
+      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+      style={{
+        display: "flex",
+        alignItems: "flex-end",
+        gap: 8,
+        justifyContent: isOwn ? "flex-end" : "flex-start",
+        padding: "1px 0",
+        fontFamily: ds.font.body,
+      }}
+      onContextMenu={openActions}
+      onTouchStart={startLongPress}
+      onTouchEnd={cancelLongPress}
+      onTouchMove={cancelLongPress}
     >
+      {/* ── Avatar (others) ── */}
       {!isOwn && (
-        <div className="mb-0.5 size-7 shrink-0 overflow-hidden rounded-full ring-1 ring-border">
-          {sender?.profile?.avatarUrl && !senderImgError ? (
-            <img src={sender.profile.avatarUrl} alt="" className="size-full object-cover" onError={() => setSenderImgError(true)} />
+        <div style={{
+          width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
+          overflow: "hidden", marginBottom: 2,
+          background: ds.avatarBg,
+          border: "0.5px solid rgba(255,255,255,0.1)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          {sender?.profile?.avatarUrl && !avatarError ? (
+            <img
+              src={sender.profile.avatarUrl}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              onError={() => setAvatarError(true)}
+            />
           ) : (
-            <div className="grid size-full place-items-center bg-card text-[10px] font-semibold uppercase">
-              {sender?.profile?.handle?.slice(0, 2) ?? "?"}
-            </div>
+            <span style={{ fontSize: 11, fontWeight: 600, color: ds.textMuted, letterSpacing: "0.04em" }}>
+              {avatarInitials}
+            </span>
           )}
         </div>
       )}
-      <div
-        className={`relative max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-2.5 text-sm ${
-          isOwn ? "bubble-me text-foreground" : "bg-card text-foreground ring-1 ring-border"
-        }`}
-      >
-        {message.replyTo && typeof message.replyTo === "object" && (
-          <div
-            className={`mb-1.5 flex cursor-pointer items-start gap-1.5 border-l-2 pl-2.5 ${
-              isOwn ? "border-foreground/30" : "border-brand/50"
-            }`}
-            onClick={() => {
-              document.getElementById(`msg-${message.replyTo._id}`)?.scrollIntoView({ behavior: "smooth" });
-            }}
-          >
-            <Reply className="mt-0.5 size-3 shrink-0 opacity-60" />
-            <div className="min-w-0">
-                <p className={`text-[11px] font-semibold ${isOwn ? "text-foreground/70" : "text-brand"}`}>
-                {replySenderName}
-              </p>
-              <p className="truncate text-[11px] opacity-60">{replyPreview ?? "..."}</p>
-            </div>
-          </div>
-        )}
 
-        {message.disappearsAt && (
-          <DisappearTimer expiresAt={message.disappearsAt} isOwn={isOwn} />
-        )}
-        {showText && <p className="whitespace-pre-wrap break-words">{displayText}</p>}
+      {/* ── Bubble wrapper (relative for action bar) ── */}
+      <div style={{ position: "relative", maxWidth: "min(78%, 380px)" }}>
+        <AnimatePresence>
+          {showActions && (
+            <ActionBar
+              isOwn={isOwn}
+              onReply={onReply ? () => onReply(message) : null}
+              onForward={onForward ? () => onForward(message) : null}
+              onPin={onPin ? () => onPin(message) : null}
+              onDelete={isOwn && onDelete ? () => { setShowActions(false); setShowDeleteSheet(true); } : null}
+              onClose={() => setShowActions(false)}
+            />
+          )}
+        </AnimatePresence>
 
-        {message.attachments?.map((att, i) => {
-          const isEncrypted = !!att.fileIv;
-          const urlOk = attachmentObjectUrls[i];
-          const decryptFailed = isEncrypted && failedAttachments.has(i);
-          const decryptPending = isEncrypted && !urlOk && !decryptFailed;
-
-          if (decryptFailed) {
-            return (
-              <div
-                key={i}
-                className={`mt-2 flex items-center gap-2 rounded-xl p-2 ${
-                  isOwn ? "bg-foreground/10" : "bg-background/50"
-                }`}
-              >
-                <File className="size-8 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium">{att.name}</p>
-                  <p className="text-[10px] text-muted-foreground">Decryption failed</p>
-                </div>
-              </div>
-            );
-          }
-
-          if (decryptPending) {
-            return (
-              <div
-                key={i}
-                className={`mt-2 flex items-center gap-2 rounded-xl p-2 ${
-                  isOwn ? "bg-foreground/10" : "bg-background/50"
-                }`}
-              >
-                <File className="size-8 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium">{att.name}</p>
-                  <p className="text-[10px] text-muted-foreground">Decrypting…</p>
-                </div>
-              </div>
-            );
-          }
-
-          return att.type === "image" ? (
-            <a
-              key={i}
-              href={urlOk}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 block"
-            >
-              <img
-                src={urlOk}
-                alt={att.name}
-                className="max-h-72 w-full rounded-xl object-cover"
-              />
-            </a>
-          ) : (
-            <div
-              key={i}
-              className={`mt-2 flex items-center gap-2 rounded-xl p-2 ${
-                isOwn ? "bg-foreground/10" : "bg-background/50"
-              }`}
-            >
-              <File className="size-8 shrink-0 text-muted-foreground" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium">{att.name}</p>
-                <p className="text-[10px] text-muted-foreground">{(att.size / 1024).toFixed(1)} KB</p>
-              </div>
-              <a
-                href={urlOk}
-                download={att.name}
-                className="shrink-0 text-[10px] underline underline-offset-2 hover:text-brand"
-              >
-                Open
-              </a>
-            </div>
-          );
-        })}
-
+        {/* ── Bubble ── */}
         <div
-          className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${
-            isOwn ? "text-foreground/60" : "text-muted-foreground"
-          }`}
+          style={{
+            background: isOwn ? ds.ownBubble : ds.otherBubble,
+            border: `0.5px solid ${isOwn ? ds.ownBorder : ds.otherBorder}`,
+            borderRadius: bubbleRadius,
+            padding: "9px 13px 7px",
+            cursor: "default",
+            userSelect: "text",
+            WebkitUserSelect: "text",
+          }}
         >
-          <span>{time}</span>
-          {isOwn && <ReadStatus delivered={message.delivered} read={message.read} />}
-        </div>
+          {/* ── Pinned indicator ── */}
+          {isPinned && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 5 }}>
+              <Pin size={10} color={ds.pinColor} strokeWidth={2.5} />
+              <span style={{ fontSize: 10, color: ds.pinColor, fontWeight: 500, letterSpacing: "0.03em" }}>
+                Pinned
+              </span>
+            </div>
+          )}
 
-        {message.forwardedFrom && (
-          <div className={`mb-0.5 flex items-center gap-1 text-[10px] ${isOwn ? "text-foreground/60" : "text-muted-foreground"}`}>
-            <Forward className="size-3" />
-            <span>Forwarded</span>
-          </div>
-        )}
-        {isPinned && (
-          <div className={`mb-1 flex items-center gap-1 text-[10px] ${isOwn ? "text-foreground/60" : "text-brand"}`}>
-            <Pin className="size-3" />
-            <span>Pinned</span>
-          </div>
-        )}
+          {/* ── Forwarded indicator ── */}
+          {message.forwardedFrom && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 5 }}>
+              <Forward size={10} color={isOwn ? "rgba(255,255,255,0.5)" : ds.textMuted} strokeWidth={2.5} />
+              <span style={{ fontSize: 10, color: isOwn ? "rgba(255,255,255,0.5)" : ds.textMuted, fontWeight: 500, letterSpacing: "0.03em" }}>
+                Forwarded
+              </span>
+            </div>
+          )}
 
-        {showDeletePrompt && onDelete && isOwn && !isDeleted && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setShowDeletePrompt(false)} />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.12 }}
-              className="absolute -top-3 right-2 z-50"
+          {/* ── Reply preview ── */}
+          {message.replyTo && typeof message.replyTo === "object" && (
+            <div
+              onClick={() => document.getElementById(`msg-${message.replyTo._id}`)?.scrollIntoView({ behavior: "smooth" })}
+              style={{
+                display: "flex", alignItems: "flex-start", gap: 8,
+                marginBottom: 7,
+                paddingLeft: 10,
+                borderLeft: `2px solid ${isOwn ? "rgba(255,255,255,0.3)" : ds.replyBarOther}`,
+                cursor: "pointer",
+              }}
             >
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(message);
-                  setShowDeletePrompt(false);
-                }}
-                className="flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium shadow-lg hover:bg-destructive hover:text-destructive-foreground"
-              >
-                <Trash2 className="size-3.5" />
-                <span>Delete</span>
-              </button>
-            </motion.div>
-          </>
-        )}
+              <div style={{ minWidth: 0 }}>
+                <p style={{
+                  fontSize: 11, fontWeight: 600, margin: 0, marginBottom: 1,
+                  color: isOwn ? "rgba(255,255,255,0.75)" : ds.brandAccent,
+                  letterSpacing: "0.01em",
+                }}>
+                  {replySenderName}
+                </p>
+                <p style={{
+                  fontSize: 11, margin: 0, color: isOwn ? "rgba(255,255,255,0.4)" : ds.textFaint,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  maxWidth: 200,
+                }}>
+                  {replyPreview ?? "…"}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Timer ── */}
+          {message.disappearsAt && (
+            <DisappearTimer expiresAt={message.disappearsAt} isOwn={isOwn} />
+          )}
+
+          {/* ── Text body ── */}
+          {displayText && (
+            <p style={{
+              margin: 0, fontSize: 15, lineHeight: 1.45,
+              color: isOwn ? "#ffffff" : ds.text,
+              whiteSpace: "pre-wrap", wordBreak: "break-word",
+              letterSpacing: "0.01em",
+            }}>
+              {displayText}
+            </p>
+          )}
+
+          {/* ── Attachments ── */}
+          {message.attachments?.map((att, i) => {
+            const isEnc = !!att.fileIv;
+            const url = attachmentUrls[i];
+            const failed = isEnc && failedAttachments.has(i);
+            const pending = isEnc && !url && !failed;
+
+            if (failed) return (
+              <AttachmentShell key={i} isOwn={isOwn}>
+                <AlertCircle size={18} color={ds.destructive} strokeWidth={1.8} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 500, margin: 0, color: ds.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.name}</p>
+                  <p style={{ fontSize: 11, margin: 0, color: ds.destructive }}>Decryption failed</p>
+                </div>
+              </AttachmentShell>
+            );
+
+            if (pending) return (
+              <AttachmentShell key={i} isOwn={isOwn}>
+                <File size={18} strokeWidth={1.5} style={{ color: ds.textMuted, flexShrink: 0 }} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 500, margin: 0, color: ds.textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.name}</p>
+                  <p style={{ fontSize: 11, margin: 0, color: ds.textFaint }}>Decrypting…</p>
+                </div>
+                <DecryptSpinner />
+              </AttachmentShell>
+            );
+
+            if (att.type === "image") return (
+              <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                style={{ display: "block", marginTop: displayText ? 8 : 0, borderRadius: 12, overflow: "hidden" }}>
+                <img src={url} alt={att.name}
+                  style={{ width: "100%", maxHeight: 280, objectFit: "cover", display: "block" }} />
+              </a>
+            );
+
+            return (
+              <AttachmentShell key={i} isOwn={isOwn}>
+                <File size={18} strokeWidth={1.5} style={{ color: isOwn ? "rgba(255,255,255,0.6)" : ds.textMuted, flexShrink: 0 }} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 500, margin: 0, color: isOwn ? "rgba(255,255,255,0.9)" : ds.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.name}</p>
+                  <p style={{ fontSize: 11, margin: 0, color: isOwn ? "rgba(255,255,255,0.45)" : ds.textFaint }}>{(att.size / 1024).toFixed(1)} KB</p>
+                </div>
+                <a href={url} download={att.name}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 28, height: 28, borderRadius: "50%",
+                    background: isOwn ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.07)",
+                    border: "0.5px solid rgba(255,255,255,0.15)",
+                    color: isOwn ? "#fff" : ds.text,
+                    flexShrink: 0, textDecoration: "none",
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Download size={13} strokeWidth={2} />
+                </a>
+              </AttachmentShell>
+            );
+          })}
+
+          {/* ── Meta row: time + read status ── */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "flex-end",
+            gap: 4, marginTop: 4,
+            color: isOwn ? "rgba(255,255,255,0.45)" : ds.textFaint,
+            fontSize: 11, letterSpacing: "0.01em",
+          }}>
+            <span>{time}</span>
+            {isOwn && <ReadStatus delivered={message.delivered} read={message.read} />}
+          </div>
+        </div>
       </div>
+
+      {/* ── Delete bottom sheet ── */}
+      {showDeleteSheet && (
+        <DeleteSheet
+          onConfirm={() => { onDelete?.(message); setShowDeleteSheet(false); }}
+          onCancel={() => setShowDeleteSheet(false)}
+        />
+      )}
     </motion.div>
+  );
+});
+
+/* ── Attachment row shell ── */
+function AttachmentShell({ isOwn, children }) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10,
+      marginTop: 6,
+      background: isOwn ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.05)",
+      border: "0.5px solid rgba(255,255,255,0.08)",
+      borderRadius: 12,
+      padding: "9px 10px",
+    }}>
+      {children}
+    </div>
+  );
+}
+
+/* ── Small CSS spinner for decrypt pending ── */
+export default MessageBubble;
+
+function DecryptSpinner() {
+  return (
+    <div style={{
+      width: 16, height: 16, borderRadius: "50%", flexShrink: 0,
+      border: "2px solid rgba(255,255,255,0.15)",
+      borderTop: "2px solid rgba(255,255,255,0.5)",
+      animation: "spin 0.8s linear infinite",
+    }}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
   );
 }

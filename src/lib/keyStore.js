@@ -2,9 +2,14 @@ const DB_NAME = "aura-connect-keys";
 const DB_VERSION = 1;
 
 let currentUserId = null;
+let dbPromise = null;
 
 export function setCurrentUser(userId) {
   currentUserId = userId;
+}
+
+export function closeDB() {
+  dbPromise = null;
 }
 
 function scoped(key, userId) {
@@ -13,7 +18,8 @@ function scoped(key, userId) {
 }
 
 function openDB() {
-  return new Promise((resolve, reject) => {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -22,70 +28,47 @@ function openDB() {
       }
     };
     req.onsuccess = () => resolve(req.result);
+    req.onerror = () => { dbPromise = null; reject(req.error); };
+  });
+  return dbPromise;
+}
+
+function tx(mode, cb) {
+  return openDB().then((db) => new Promise((resolve, reject) => {
+    const t = db.transaction("keys", mode);
+    cb(t.objectStore("keys"), resolve, reject);
+    t.onerror = () => reject(t.error);
+  }));
+}
+
+export async function storeKey(keyName, value, userId) {
+  return tx("readwrite", (store, resolve, reject) => {
+    const req = store.put(value, scoped(keyName, userId));
+    req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
 }
 
-export async function storeKey(keyName, value, userId) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("keys", "readwrite");
-    tx.objectStore("keys").put(value, scoped(keyName, userId));
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error);
-    };
-  });
-}
-
 export async function getKey(keyName, userId) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("keys", "readonly");
-    const req = tx.objectStore("keys").get(scoped(keyName, userId));
-    req.onsuccess = () => {
-      db.close();
-      resolve(req.result ?? null);
-    };
-    req.onerror = () => {
-      db.close();
-      reject(req.error);
-    };
+  return tx("readonly", (store, resolve, reject) => {
+    const req = store.get(scoped(keyName, userId));
+    req.onsuccess = () => resolve(req.result ?? null);
+    req.onerror = () => reject(req.error);
   });
 }
 
 export async function removeKey(keyName, userId) {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("keys", "readwrite");
-    tx.objectStore("keys").delete(scoped(keyName, userId));
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error);
-    };
+  return tx("readwrite", (store, resolve, reject) => {
+    const req = store.delete(scoped(keyName, userId));
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
   });
 }
 
 export async function clearAllKeys() {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction("keys", "readwrite");
-    tx.objectStore("keys").clear();
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error);
-    };
+  return tx("readwrite", (store, resolve, reject) => {
+    const req = store.clear();
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
   });
 }

@@ -6,7 +6,7 @@ import { Conversation } from '../models/Conversation.js';
 import { CallSession } from '../models/CallSession.js';
 import { createAccessToken, createRefreshToken, verifyRefreshToken } from './tokenService.js';
 
-const SALT_ROUNDS = 12;
+const SALT_ROUNDS = 10;
 
 export async function registerUser({ email, password, profile }) {
   const existing = await User.findOne({ $or: [{ email }, { 'profile.handle': profile?.handle }] });

@@ -138,7 +138,7 @@ export default function EmojiPicker({ onEmojiSelect }) {
         <button
           key={i}
           onClick={() => onEmojiSelect(emoji)}
-          className="flex size-8 items-center justify-center rounded-lg text-lg hover:bg-card/60 transition-colors"
+          className="flex size-8 items-center justify-center rounded-lg text-base hover:bg-card/60 transition-colors"
         >
           {emoji}
         </button>

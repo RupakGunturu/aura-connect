@@ -5,7 +5,7 @@ import {
   MessageCircle,
   Search,
   Send,
-  Paperclip,
+  Smile,
   ImageIcon,
   Reply,
   X,
@@ -23,6 +23,7 @@ import {
   decryptMessage,
   encryptFile,
   decryptFile,
+  base64Url,
 } from "@/lib/e2ee";
 import {
   storeKey,
@@ -35,9 +36,9 @@ import ConversationList from "@/components/chat/ConversationList";
 import AddFriend from "@/components/chat/AddFriend";
 import ChatHeader from "@/components/chat/ChatHeader";
 import MessageList from "@/components/chat/MessageList";
-import MessageInput from "@/components/chat/MessageInput";
 import ForwardDialog from "@/components/chat/ForwardDialog";
 import FriendRequests from "@/components/chat/FriendRequests";
+import EmojiPicker from "@/components/chat/EmojiPicker";
 import TypingIndicator from "@/components/chat/TypingIndicator";
 import {
   requestNotificationPermission,
@@ -381,6 +382,12 @@ export default function Chat() {
   const [isSending, setIsSending] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);          // ← debounce flag
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  function handleEmojiSelect(emoji) {
+    setBody((prev) => prev + emoji);
+    setShowEmojiPicker(false);
+  }
 
   const conversationIdRef = useRef(conversationId);
   conversationIdRef.current = conversationId;
@@ -665,31 +672,42 @@ export default function Chat() {
 
   const handleDecryptAttachment = useCallback(
     async (message, att) => {
-      if (!e2eeReady || !att.fileIv || !att.fileAuthTag) return att.url;
+      if (!e2eeReady || !att.fileIv || !att.fileAuthTag) {
+        console.log("[decryptAttachment] skipped — e2eeReady=%s fileIv=%s fileAuthTag=%s", e2eeReady, !!att.fileIv, !!att.fileAuthTag);
+        return att.url;
+      }
       const counter = message.metadata?.counter ?? 0;
       let peerId = message.senderId;
       if (message.senderId === user?.id) {
         let peer = otherParticipant(activeConversation);
         if (!peer) { const fc = conversationsRef.current.find((c) => c._id === message.conversationId); peer = otherParticipant(fc); }
-        if (!peer) return null;
+        if (!peer) { console.log("[decryptAttachment] no peer found for own message"); return null; }
         peerId = peer._id;
       }
       const secret = await getSharedSecret(peerId);
-      if (!secret) return null;
-      const base64Part = att.url.split(",")[1];
-      if (!base64Part) return null;
-      const b64url = base64Part.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-      const tryDecrypt = async (s) => URL.createObjectURL(await decryptFile(s, b64url, att.fileIv, att.fileAuthTag, message.conversationId, counter));
-      try { return await tryDecrypt(secret); } catch {
-        if (peerPublicKeysRef.current[peerId]) {
-          delete peerPublicKeysRef.current[peerId];
-          const sk = [user.id, peerId].sort().join(":");
-          await Promise.all([removeKey(`sharedSecret:${sk}`, user.id), removeKey(`sharedSecretPubKey:${sk}`, user.id)]);
-          const rs = await getSharedSecret(peerId);
-          if (rs) { try { return await tryDecrypt(rs); } catch {} }
-        }
-        return null;
+      if (!secret) { console.log("[decryptAttachment] getSharedSecret returned null for peer", peerId); return null; }
+      let resp;
+      try { resp = await fetch(att.url); } catch (e) { console.log("[decryptAttachment] fetch failed:", e.message); return null; }
+      const buf = await resp.arrayBuffer();
+      const b64url = base64Url(new Uint8Array(buf));
+      const tryDecrypt = async (s, c) => URL.createObjectURL(await decryptFile(s, b64url, att.fileIv, att.fileAuthTag, message.conversationId, c));
+      const tryOne = async (s, c) => { try { return await tryDecrypt(s, c); } catch (e) { console.log("[decryptAttachment] counter=%d failed: %s", c, e.message); return null; } };
+      const first = await tryOne(secret, counter);
+      if (first) return first;
+      for (let c = 0; c <= 5; c++) {
+        if (c === counter) continue;
+        const r = await tryOne(secret, c);
+        if (r) return r;
       }
+      if (peerPublicKeysRef.current[peerId]) {
+        delete peerPublicKeysRef.current[peerId];
+        const sk = [user.id, peerId].sort().join(":");
+        await Promise.all([removeKey(`sharedSecret:${sk}`, user.id), removeKey(`sharedSecretPubKey:${sk}`, user.id)]);
+        const rs = await getSharedSecret(peerId);
+        if (rs) { const r2 = await tryOne(rs, counter); if (r2) return r2; for (let c = 0; c <= 5; c++) { if (c === counter) continue; const r = await tryOne(rs, c); if (r) return r; } }
+      }
+      console.log("[decryptAttachment] all attempts failed for msg", message._id);
+      return null;
     },
     [user?.id, e2eeReady, activeConversation]
   );
@@ -733,9 +751,11 @@ export default function Chat() {
         payload.body = plaintext;
       }
       const response = await api("/messages", { method: "POST", body: JSON.stringify(payload), token });
-      setMessages((prev) =>
-        prev.map((m) => (m._id === tempId ? { ...response.message, body: plaintext } : m)),
-      );
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === response.message._id))
+          return prev.filter((m) => m._id !== tempId);
+        return prev.map((m) => (m._id === tempId ? { ...response.message, body: plaintext } : m));
+      });
       textareaRef.current?.focus();
     } catch (err) {
       console.error("sendMessage:", err.message);
@@ -1131,22 +1151,22 @@ export default function Chat() {
                   />
                 </label>
 
-                {/* Attach file */}
-                <label
-                  style={{ ...S.iconBtn, cursor: "pointer" }}
-                  title="Attach file"
-                >
-                  <Paperclip size={16} />
-                  <input
-                    type="file"
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) handleUploadFile(f, "file");
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
+                {/* Emoji picker */}
+                <div style={{ position: "relative" }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowEmojiPicker((v) => !v)}
+                    style={S.iconBtn}
+                    title="Emoji picker"
+                  >
+                    <Smile size={16} />
+                  </button>
+                  {showEmojiPicker && (
+                    <div style={{ position: "absolute", bottom: "100%", left: 0, marginBottom: 8, zIndex: 50 }}>
+                      <EmojiPicker onEmojiSelect={handleEmojiSelect} />
+                    </div>
+                  )}
+                </div>
 
                 {/* Text input */}
                 <textarea

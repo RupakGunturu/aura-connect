@@ -150,15 +150,11 @@ export function AuthProvider({ children }) {
   }, [token, user?.id]);
 
   const logout = useCallback(async () => {
-    try {
-      await fetch(`${API_URL}/auth/logout`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: "include",
-      });
-    } catch {
-      // ignore server error on logout
-    }
+    fetch(`${API_URL}/auth/logout`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
+    }).catch(() => {});
     disconnectSocket();
     setToken(null);
     setUser(null);

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Image, Paperclip, Smile, X, Reply } from "lucide-react";
+import { Send, Image, Smile, X, Reply } from "lucide-react";
 import EmojiPicker from "./EmojiPicker";
 
 export default function MessageInput({
@@ -14,7 +14,6 @@ export default function MessageInput({
   onTypingChange,
 }) {
   const [showEmoji, setShowEmoji] = useState(false);
-  const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
   const typingTimerRef = useRef(null);
   const isTypingRef = useRef(false);
@@ -129,25 +128,6 @@ export default function MessageInput({
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) onUploadImage(file);
-            e.target.value = "";
-          }}
-        />
-
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="grid size-9 sm:size-10 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-card/60 hover:text-foreground transition-colors"
-          title="Upload file"
-        >
-          <Paperclip className="size-4" />
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onUploadFile(file);
             e.target.value = "";
           }}
         />
