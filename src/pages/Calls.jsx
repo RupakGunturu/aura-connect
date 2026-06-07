@@ -113,7 +113,7 @@ export default function Calls() {
                 >
                   <div className="size-10 shrink-0 overflow-hidden rounded-full ring-1 ring-border">
                     {other?.profile?.avatarUrl ? (
-                      <img src={other.profile.avatarUrl} alt="" className="size-full object-cover" />
+                      <img src={other.profile.avatarUrl} alt="" loading="lazy" className="size-full object-cover" />
                     ) : (
                       <div className="grid size-full place-items-center bg-card text-sm font-semibold uppercase">
                         {other?.profile?.handle?.slice(0, 2) ?? "?"}

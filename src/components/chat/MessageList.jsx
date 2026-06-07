@@ -1,15 +1,20 @@
-import { useEffect, useRef } from "react";
+import { useMemo, memo } from "react";
 import { Pin } from "lucide-react";
+import { Virtuoso } from "react-virtuoso";
 import MessageBubble from "./MessageBubble";
 
-export default function MessageList({ messages, currentUserId, participants, decryptMessage, decryptAttachment, onReply, onDelete, isSearching, pinnedMessages, onPin, onForward, onLoadOlder, hasMore, loadingMore }) {
-  const endRef = useRef(null);
+const MessageList = memo(function MessageList({ messages, currentUserId, participants, decryptMessage, decryptAttachment, onReply, onDelete, isSearching, pinnedMessages, onPin, onForward, onLoadOlder, hasMore, loadingMore }) {
+  const sortedMessages = useMemo(
+    () => [...messages].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)),
+    [messages],
+  );
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  const pinnedIds = useMemo(
+    () => new Set(pinnedMessages?.map((p) => p.messageId?._id || p.messageId) ?? []),
+    [pinnedMessages],
+  );
 
-  if (messages.length === 0) {
+  if (sortedMessages.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center py-12 text-sm text-muted-foreground">
         {isSearching ? "No messages match your search" : "No messages yet. Say hello!"}
@@ -17,12 +22,10 @@ export default function MessageList({ messages, currentUserId, participants, dec
     );
   }
 
-  const pinnedIds = new Set(pinnedMessages?.map((p) => p.messageId?._id || p.messageId) ?? []);
-
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4">
+    <div className="flex flex-1 flex-col overflow-hidden">
       {pinnedMessages?.length > 0 && (
-        <div className="mb-3 rounded-xl border border-border bg-card/50 p-3">
+        <div className="shrink-0 border-b border-border bg-card/50 px-4 py-3">
           <div className="mb-2 flex items-center gap-1.5 text-xs text-brand">
             <Pin className="size-3" />
             <span className="font-semibold">Pinned messages</span>
@@ -46,27 +49,34 @@ export default function MessageList({ messages, currentUserId, participants, dec
           </div>
         </div>
       )}
-      <div className="space-y-3">
-          {hasMore && (
-            <div className="flex justify-center py-2">
-              <button
-                onClick={onLoadOlder}
-                disabled={loadingMore}
-                className="rounded-full border border-border bg-card px-4 py-1.5 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
-              >
-                {loadingMore ? "Loading…" : "Load older messages"}
-              </button>
-            </div>
-          )}
-          {[...messages]
-            .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-            .map((msg) => {
-              const isOwn = msg.senderId === currentUserId;
-              const senderId = typeof msg.senderId === "string" ? msg.senderId : msg.senderId?._id;
-              const sender = participants?.find((p) => (p._id ?? p.id) === senderId);
-              return (
+      <div className="flex-1">
+        <Virtuoso
+          ref={virtuosoRef}
+          data={sortedMessages}
+          className="h-full"
+          followOutput="smooth"
+          startReached={onLoadOlder}
+          components={{
+            Header: () => hasMore ? (
+              <div className="flex justify-center py-3">
+                <button
+                  onClick={onLoadOlder}
+                  disabled={loadingMore}
+                  className="rounded-full border border-border bg-card px-4 py-1.5 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                >
+                  {loadingMore ? "Loading…" : "Load older messages"}
+                </button>
+              </div>
+            ) : null,
+            Footer: () => <div style={{ height: 8 }} />,
+          }}
+          itemContent={(index, msg) => {
+            const isOwn = msg.senderId === currentUserId;
+            const senderId = typeof msg.senderId === "string" ? msg.senderId : msg.senderId?._id;
+            const sender = participants?.find((p) => (p._id ?? p.id) === senderId);
+            return (
+              <div style={{ padding: "1px 16px" }}>
                 <MessageBubble
-                  key={msg._id}
                   message={msg}
                   isOwn={isOwn}
                   sender={sender}
@@ -78,10 +88,13 @@ export default function MessageList({ messages, currentUserId, participants, dec
                   isPinned={pinnedIds.has(msg._id)}
                   onForward={onForward}
                 />
-              );
-            })}
-        <div ref={endRef} />
+              </div>
+            );
+          }}
+        />
       </div>
     </div>
   );
-}
+});
+
+export default MessageList;

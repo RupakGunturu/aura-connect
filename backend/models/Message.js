@@ -29,6 +29,7 @@ const messageSchema = new mongoose.Schema(
 );
 
 messageSchema.index({ conversationId: 1, createdAt: -1 });
+messageSchema.index({ conversationId: 1, read: 1, senderId: 1 });
 messageSchema.index({ disappearsAt: 1 }, { expireAfterSeconds: 0 });
 
 export const Message = mongoose.model('Message', messageSchema);

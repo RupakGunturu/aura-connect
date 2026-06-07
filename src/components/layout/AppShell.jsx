@@ -109,13 +109,6 @@ export function AppShell({ children }) {
           <User className="size-5" />
           <span>Profile</span>
         </Link>
-        <button
-          onClick={handleLogout}
-          className="flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] text-muted-foreground"
-        >
-          <LogOut className="size-5" />
-          <span>Logout</span>
-        </button>
       </nav>
     </div>
   );

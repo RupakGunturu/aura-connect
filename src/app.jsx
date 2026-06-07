@@ -38,7 +38,7 @@ const App = () => {
           pauseOnHover
           theme="dark"
         />
-        <BrowserRouter future={{ v7_startTransition: true }}>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <IncomingCallModal />
           <ActiveCallOverlay />
           <Routes>

@@ -1,27 +1,26 @@
+import { memo, useState } from "react";
 import { MessageCircle, ChevronDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { useState } from "react";
-
-function Avatar({ user, size = "md" }) {
+const Avatar = memo(function Avatar({ user, size = "md" }) {
   const [imgError, setImgError] = useState(false);
   const sizeMap = { sm: "size-8 text-xs", md: "size-10 text-sm", lg: "size-12 text-base" };
   const avatarUrl = user?.profile?.avatarUrl;
   const handle = user?.profile?.handle ?? "?";
   const cls = `grid shrink-0 place-items-center rounded-full bg-card font-semibold uppercase ring-1 ring-border ${sizeMap[size]}`;
   if (avatarUrl && !imgError) {
-    return <img src={avatarUrl} alt={handle} className={`${cls} object-cover`} onError={() => setImgError(true)} />;
+    return <img src={avatarUrl} alt={handle} loading="lazy" className={`${cls} object-cover`} onError={() => setImgError(true)} />;
   }
   return <div className={cls}>{handle.slice(0, 2)}</div>;
-}
+});
 
-function LastMessagePreview({ message }) {
+const LastMessagePreview = memo(function LastMessagePreview({ message }) {
   if (!message) return <span className="text-xs text-muted-foreground">No messages yet</span>;
   const text = message.encryptedPayload ? "🔒 Encrypted message" : message.body || "Attachment";
   return <span className="truncate text-xs text-muted-foreground">{text}</span>;
-}
+});
 
-export default function ConversationList({
+const ConversationList = memo(function ConversationList({
   conversations,
   activeId,
   currentUserId,
@@ -100,6 +99,7 @@ export default function ConversationList({
       </div>
     </div>
   );
-}
+});
 
+export default ConversationList;
 export { Avatar };

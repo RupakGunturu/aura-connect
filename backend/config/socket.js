@@ -20,10 +20,11 @@ export function createSocketServer(server) {
       methods: ['GET', 'POST'],
       credentials: true,
     },
-    transports: env.nodeEnv === 'production' ? ['websocket'] : ['polling', 'websocket'],
+    transports: ['websocket', 'polling'],
     allowEIO3: false,
-    pingTimeout: 20000,
-    pingInterval: 25000,
+    maxHttpBufferSize: 65536,
+    pingTimeout: 5000,
+    pingInterval: 10000,
   });
 
   io.use(async (socket, next) => {
@@ -41,8 +42,27 @@ export function createSocketServer(server) {
     }
   });
 
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     socket.join(`user:${socket.user.id}`);
+
+    const rateLimits = {};
+    socket.use((packet, next) => {
+      const event = packet[0];
+      const limits = { sendMessage: 30, 'typing:start': 20, 'typing:stop': 20, markRead: 30, joinConversation: 30, leaveConversation: 30 };
+      const maxPerMin = limits[event];
+      if (maxPerMin) {
+        const now = Date.now();
+        const entry = rateLimits[event] || (rateLimits[event] = { count: 0, resetAt: now + 60000 });
+        if (now > entry.resetAt) { entry.count = 0; entry.resetAt = now + 60000; }
+        entry.count++;
+        if (entry.count > maxPerMin) {
+          socket.emit('error', `Rate limit exceeded for "${event}"`);
+          return;
+        }
+      }
+      next();
+    });
+
     initializeChatSocket(socket, io);
     initializePresenceSocket(socket);
     initializeCallSocket(socket);

@@ -34,3 +34,4 @@ dist-ssr
 # Environment files (contain secrets)
 .env
 backend/.env
+.vercel

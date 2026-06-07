@@ -2,6 +2,7 @@ import { createConversation, getConversationById, getUserConversations, addParti
 import { markConversationRead } from '../services/messageService.js';
 import { clearConversationHistory } from '../services/conversationService.js';
 import { requireFields } from '../utils/validation.js';
+import { requireConversationMember } from '../utils/membership.js';
 
 export async function listConversations(req, res, next) {
   try {
@@ -14,6 +15,7 @@ export async function listConversations(req, res, next) {
 
 export async function getConversation(req, res, next) {
   try {
+    await requireConversationMember(req.params.conversationId, req.user.id);
     const conversation = await getConversationById(req.params.conversationId);
     if (!conversation) {
       const error = new Error('Conversation not found');
@@ -48,6 +50,7 @@ export async function joinConversation(req, res, next) {
 
 export async function markAsRead(req, res, next) {
   try {
+    await requireConversationMember(req.params.conversationId, req.user.id);
     await markConversationRead(req.params.conversationId, req.user.id);
     res.status(200).json({ success: true });
   } catch (error) {
@@ -57,6 +60,7 @@ export async function markAsRead(req, res, next) {
 
 export async function pinMessageHandler(req, res, next) {
   try {
+    await requireConversationMember(req.params.conversationId, req.user.id);
     const conversation = await pinMessage(req.params.conversationId, req.params.messageId, req.user.id);
     if (!conversation) {
       const error = new Error('Conversation not found');
@@ -81,6 +85,7 @@ export async function pinMessageHandler(req, res, next) {
 
 export async function unpinMessageHandler(req, res, next) {
   try {
+    await requireConversationMember(req.params.conversationId, req.user.id);
     const conversation = await unpinMessage(req.params.conversationId, req.params.messageId);
     if (!conversation) {
       const error = new Error('Conversation not found');
@@ -104,6 +109,7 @@ export async function unpinMessageHandler(req, res, next) {
 
 export async function setDisappearDurationHandler(req, res, next) {
   try {
+    await requireConversationMember(req.params.conversationId, req.user.id);
     const { duration } = req.body;
     if (typeof duration !== 'number' || duration < 0) {
       const error = new Error('Invalid duration');
@@ -133,6 +139,7 @@ export async function setDisappearDurationHandler(req, res, next) {
 
 export async function clearHistory(req, res, next) {
   try {
+    await requireConversationMember(req.params.conversationId, req.user.id);
     await clearConversationHistory(req.params.conversationId, req.user.id);
     res.status(200).json({ success: true });
   } catch (error) {
@@ -143,6 +150,7 @@ export async function clearHistory(req, res, next) {
 export async function leaveConversation(req, res, next) {
   try {
     requireFields(req.body, ['participantId']);
+    await requireConversationMember(req.params.conversationId, req.user.id);
     const conversation = await removeParticipant(req.params.conversationId, req.body.participantId);
     res.status(200).json({ conversation });
   } catch (error) {

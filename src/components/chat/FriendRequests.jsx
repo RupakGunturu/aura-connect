@@ -54,7 +54,7 @@ export default function FriendRequests({ onBack }) {
 
   function AvatarImg({ src, name }) {
     if (src) {
-      return <img src={src} alt="" className="size-9 shrink-0 rounded-full object-cover ring-1 ring-border" />;
+      return <img src={src} alt="" loading="lazy" className="size-9 shrink-0 rounded-full object-cover ring-1 ring-border" />;
     }
     return (
       <div className="grid size-9 shrink-0 place-items-center rounded-full bg-card text-xs font-semibold uppercase ring-1 ring-border">

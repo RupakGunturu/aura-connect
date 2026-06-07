@@ -1,12 +1,17 @@
 import { htmlEscape } from '../utils/validation.js';
 
-function sanitizeObject(obj) {
+const sensitiveFields = new Set(['password', 'currentPassword', 'newPassword']);
+
+function sanitizeObject(obj, key = '') {
+  if (typeof obj === 'string' && sensitiveFields.has(key)) {
+    return obj.trim();
+  }
   if (Array.isArray(obj)) {
-    return obj.map(sanitizeObject);
+    return obj.map((v) => sanitizeObject(v));
   }
   if (obj && typeof obj === 'object') {
     return Object.fromEntries(
-      Object.entries(obj).map(([key, value]) => [key, sanitizeObject(value)]),
+      Object.entries(obj).map(([k, v]) => [k, sanitizeObject(v, k)]),
     );
   }
   if (typeof obj === 'string') {

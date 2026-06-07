@@ -532,32 +532,34 @@ export default function Chat() {
     setPinnedMessages(activeConversation?.pinned ?? []);
   }, [activeConversation?.pinned]);
 
+  useEffect(() => {
+    const peer = otherParticipant(activeConversation);
+    if (!peer?._id || !e2eeReady) return;
+    getSharedSecret(peer._id).catch(() => {});
+  }, [activeConversation?._id, e2eeReady]);
+
   /* ─── socket ─────────────────────────────────────────────────────────────── */
   useEffect(() => {
     const s = connectSocket(token);
     socketRef.current = s;
 
-    s.on("userOnline", ({ userId }) => setOnlineUsers((p) => new Set(p).add(userId)));
-    s.on("userOffline", ({ userId }) =>
-      setOnlineUsers((p) => { const n = new Set(p); n.delete(userId); return n; })
-    );
-    s.on("friendRequestAccepted", () => toast.success("Friend request accepted!"));
-    s.on("messagePinned", () => loadConversations());
-    s.on("messageUnpinned", () => loadConversations());
-    s.on("messageDeleted", ({ messageId }) =>
-      setMessages((p) => p.map((m) => m._id === messageId ? { ...m, deletedAt: new Date().toISOString() } : m))
-    );
-    s.on("conversationRead", ({ conversationId: cid }) =>
-      setMessages((p) => p.map((m) => m.conversationId === cid && m.senderId !== user?.id ? { ...m, read: true } : m))
-    );
-    s.on("typing:start", ({ userId: uid }) => {
+    const onUserOnline = ({ userId }) => setOnlineUsers((p) => new Set(p).add(userId));
+    const onUserOffline = ({ userId }) =>
+      setOnlineUsers((p) => { const n = new Set(p); n.delete(userId); return n; });
+    const onFriendReqAccepted = () => toast.success("Friend request accepted!");
+    const onMessagePinned = () => loadConversations();
+    const onMessageUnpinned = () => loadConversations();
+    const onMessageDeleted = ({ messageId }) =>
+      setMessages((p) => p.map((m) => m._id === messageId ? { ...m, deletedAt: new Date().toISOString() } : m));
+    const onConversationRead = ({ conversationId: cid }) =>
+      setMessages((p) => p.map((m) => m.conversationId === cid && m.senderId !== user?.id ? { ...m, read: true } : m));
+    const onTypingStart = ({ userId: uid }) => {
       if (uid === user?.id) return;
       setTypingUsers((p) => { const n = new Set(p); n.add(uid); return n; });
-    });
-    s.on("typing:stop", ({ userId: uid }) =>
-      setTypingUsers((p) => { const n = new Set(p); n.delete(uid); return n; })
-    );
-    s.on("message", (msg) => {
+    };
+    const onTypingStop = ({ userId: uid }) =>
+      setTypingUsers((p) => { const n = new Set(p); n.delete(uid); return n; });
+    const onMessage = (msg) => {
       setMessages((prev) => {
         if (prev.some((m) => m._id === msg._id)) return prev;
         if (msg.conversationId === conversationIdRef.current) {
@@ -569,14 +571,31 @@ export default function Chat() {
       setConversations((p) => p.map((c) => c._id === msg.conversationId ? { ...c, lastMessage: msg } : c));
       if (msg.conversationId !== conversationIdRef.current)
         setUnreadCounts((p) => ({ ...p, [msg.conversationId]: (p[msg.conversationId] || 0) + 1 }));
-    });
+    };
+
+    s.on("userOnline", onUserOnline);
+    s.on("userOffline", onUserOffline);
+    s.on("friendRequestAccepted", onFriendReqAccepted);
+    s.on("messagePinned", onMessagePinned);
+    s.on("messageUnpinned", onMessageUnpinned);
+    s.on("messageDeleted", onMessageDeleted);
+    s.on("conversationRead", onConversationRead);
+    s.on("typing:start", onTypingStart);
+    s.on("typing:stop", onTypingStop);
+    s.on("message", onMessage);
     s.emit("online");
 
     return () => {
-      s.off("userOnline"); s.off("userOffline"); s.off("conversationRead");
-      s.off("message"); s.off("typing:start"); s.off("typing:stop");
-      s.off("messagePinned"); s.off("messageUnpinned");
-      s.off("messageDeleted"); s.off("friendRequestAccepted");
+      s.off("userOnline", onUserOnline);
+      s.off("userOffline", onUserOffline);
+      s.off("friendRequestAccepted", onFriendReqAccepted);
+      s.off("messagePinned", onMessagePinned);
+      s.off("messageUnpinned", onMessageUnpinned);
+      s.off("messageDeleted", onMessageDeleted);
+      s.off("conversationRead", onConversationRead);
+      s.off("typing:start", onTypingStart);
+      s.off("typing:stop", onTypingStop);
+      s.off("message", onMessage);
       setTypingUsers(new Set());
       s.emit("offline");
     };
@@ -604,9 +623,9 @@ export default function Chat() {
       const data = await api(`/messages/${id}${qs ? `?${qs}` : ""}`, { token });
       const msgs = data.messages ?? [];
       setMessages((prev) => {
-        if (!before) return msgs;
         const existing = new Set(prev.map((m) => m._id));
-        return [...msgs.filter((m) => !existing.has(m._id)), ...prev];
+        const merged = [...msgs.filter((m) => !existing.has(m._id)), ...prev];
+        return merged;
       });
       if (!before) setHasMore(data.hasMore !== false);
       else setHasMore(data.hasMore !== false);
@@ -765,11 +784,19 @@ export default function Chat() {
       } else {
         payload.body = plaintext;
       }
-      const response = await api("/messages", { method: "POST", body: JSON.stringify(payload), token });
+      const s = socketRef.current;
+      const result = s?.connected
+        ? await new Promise((resolve, reject) => {
+            s.emit('sendMessage', payload, (res) => {
+              if (res.success) resolve(res.message);
+              else reject(new Error(res.error || 'Send failed'));
+            });
+          })
+        : (await api("/messages", { method: "POST", body: JSON.stringify(payload), token })).message;
       setMessages((prev) => {
-        if (prev.some((m) => m._id === response.message._id))
+        if (prev.some((m) => m._id === result._id))
           return prev.filter((m) => m._id !== tempId);
-        return prev.map((m) => (m._id === tempId ? { ...response.message, body: plaintext } : m));
+        return prev.map((m) => (m._id === tempId ? { ...result, body: plaintext } : m));
       });
       textareaRef.current?.focus();
     } catch (err) {

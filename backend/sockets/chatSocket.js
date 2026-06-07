@@ -1,3 +1,6 @@
+import { isConversationMember } from '../utils/membership.js';
+import { createMessage } from '../services/messageService.js';
+
 export function initializeChatSocket(socket, io) {
   const userId = socket.user?.id;
   const userName = socket.user?.profile?.name;
@@ -5,7 +8,27 @@ export function initializeChatSocket(socket, io) {
     socket.join(`user:${userId}`);
   }
 
-  socket.on('joinConversation', (conversationId) => {
+  socket.on('sendMessage', async (payload, ack) => {
+    try {
+      const rawSize = Buffer.byteLength(JSON.stringify(payload), 'utf8');
+      if (rawSize > 65536) {
+        if (typeof ack === 'function') ack({ success: false, error: 'Message exceeds 64KB limit' });
+        return;
+      }
+      payload.senderId = userId;
+      const message = await createMessage(payload);
+      io.to(`conversation:${message.conversationId}`).emit('message', message);
+      if (typeof ack === 'function') ack({ success: true, message });
+    } catch (err) {
+      if (typeof ack === 'function') ack({ success: false, error: err.message });
+    }
+  });
+
+  socket.on('joinConversation', async (conversationId) => {
+    if (!(await isConversationMember(conversationId, userId))) {
+      socket.emit('error', 'Access denied — you are not a participant of this conversation');
+      return;
+    }
     socket.join(`conversation:${conversationId}`);
   });
 

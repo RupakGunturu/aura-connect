@@ -1,6 +1,5 @@
 import { Message } from '../models/Message.js';
 import { Conversation } from '../models/Conversation.js';
-
 export async function getConversationMessages(conversationId, limit = 50, userId = null, before = null) {
   const filter = { conversationId };
   if (before) {
@@ -8,7 +7,12 @@ export async function getConversationMessages(conversationId, limit = 50, userId
     if (ref) filter.createdAt = { ...(filter.createdAt || {}), $lt: ref.createdAt };
   }
   if (userId) {
-    const conv = await Conversation.findById(conversationId).select('clearedHistoryAt').lean();
+    const conv = await Conversation.findOne({ _id: conversationId, participants: userId }).select('clearedHistoryAt').lean();
+    if (!conv) {
+      const err = new Error('Access denied — you are not a participant of this conversation');
+      err.status = 403;
+      throw err;
+    }
     const clearedAt = conv?.clearedHistoryAt?.[userId];
     if (clearedAt) {
       filter.createdAt = { ...(filter.createdAt || {}), $gt: clearedAt };
@@ -27,35 +31,41 @@ export async function getConversationMessages(conversationId, limit = 50, userId
 
 export async function createMessage(messagePayload) {
   const conversationId = messagePayload.conversationId;
+  const senderId = messagePayload.senderId;
 
-  const conversation = await Conversation.findById(conversationId);
-  if (conversation && conversation.disappearDuration > 0) {
+  const conversation = await Conversation.findOne({ _id: conversationId, participants: senderId }).select('disappearDuration participants').lean();
+  if (!conversation) {
+    const err = new Error('Access denied — you are not a participant of this conversation');
+    err.status = 403;
+    throw err;
+  }
+  if (conversation.disappearDuration > 0) {
     messagePayload.disappearsAt = new Date(Date.now() + conversation.disappearDuration * 1000);
   }
 
   const message = new Message(messagePayload);
+  message.delivered = false;
+  message.read = false;
   await message.save();
 
-  const senderId = messagePayload.senderId;
-
-  if (conversation) {
-    conversation.lastMessage = message._id;
-    for (const pid of conversation.participants) {
-      if (pid.toString() !== senderId) {
-        const key = pid.toString();
-        conversation.unreadCounts.set(key, (conversation.unreadCounts.get(key) || 0) + 1);
-      }
-    }
-    await conversation.save();
-  }
+  // EMIT CAN HAPPEN NOW — background ops below
 
   if (message.replyTo) {
-    await message.populate({
+    message.populate({
       path: 'replyTo',
       select: 'senderId body encryptedPayload iv authTag metadata createdAt',
       populate: { path: 'senderId', select: 'profile.name profile.handle' },
-    });
+    }).catch(() => {});
   }
+
+  Conversation.findByIdAndUpdate(conversationId, {
+    lastMessage: message._id,
+    $inc: Object.fromEntries(
+      (conversation?.participants ?? [])
+        .filter((p) => p.toString() !== senderId)
+        .map((p) => [`unreadCounts.${p.toString()}`, 1]),
+    ),
+  }).catch((err) => console.error('Failed to update conversation after message', err));
 
   return message;
 }

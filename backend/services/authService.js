@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { User } from '../models/User.js';
 import { Message } from '../models/Message.js';
@@ -6,7 +6,7 @@ import { Conversation } from '../models/Conversation.js';
 import { CallSession } from '../models/CallSession.js';
 import { createAccessToken, createRefreshToken, verifyRefreshToken } from './tokenService.js';
 
-const SALT_ROUNDS = 8;
+const SALT_ROUNDS = 10;
 
 export async function registerUser({ email, password, profile }) {
   const existing = await User.findOne({ $or: [{ email }, { 'profile.handle': profile?.handle }] });
@@ -51,8 +51,9 @@ export async function createSessionTokens(user, deviceInfo = '') {
   const accessToken = createAccessToken(payload);
   const refreshToken = createRefreshToken(payload);
 
-  user.sessions.push({ sessionId, refreshToken, deviceInfo });
-  await user.save();
+  await User.findByIdAndUpdate(user._id, {
+    $push: { sessions: { $each: [{ sessionId, refreshToken, deviceInfo }], $slice: -50 } },
+  });
 
   return { accessToken, refreshToken };
 }

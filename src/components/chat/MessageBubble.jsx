@@ -12,6 +12,7 @@ import {
   AlertCircle,
   Download,
 } from "lucide-react";
+import ImagePreview from "./ImagePreview";
 
 /* ─────────────────────────────────────────────
    Inline styles — full dark-only design system
@@ -265,6 +266,7 @@ const MessageBubble = memo(function MessageBubble({
   const [attachmentUrls, setAttachmentUrls] = useState({});
   const [failedAttachments, setFailedAttachments] = useState(new Set());
   const [avatarError, setAvatarError] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(null);
   const blobRef = useRef({});
   const longPressRef = useRef(null);
   const bubbleRef = useRef(null);
@@ -390,6 +392,7 @@ const MessageBubble = memo(function MessageBubble({
             <img
               src={sender.profile.avatarUrl}
               alt=""
+              loading="lazy"
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
               onError={() => setAvatarError(true)}
             />
@@ -525,11 +528,14 @@ const MessageBubble = memo(function MessageBubble({
             );
 
             if (att.type === "image") return (
-              <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                style={{ display: "block", marginTop: displayText ? 8 : 0, borderRadius: 12, overflow: "hidden" }}>
-                <img src={url} alt={att.name}
+              <div key={i} onClick={() => {
+                const imgIdx = message.attachments.findIndex((a, idx) => a.type === "image" && idx === i);
+                setPreviewIndex(imgIdx >= 0 ? imgIdx : 0);
+              }}
+                style={{ display: "block", marginTop: displayText ? 8 : 0, borderRadius: 12, overflow: "hidden", cursor: "pointer" }}>
+                <img src={url} alt={att.name} loading="lazy"
                   style={{ width: "100%", maxHeight: 280, objectFit: "cover", display: "block" }} />
-              </a>
+              </div>
             );
 
             return (
@@ -568,6 +574,23 @@ const MessageBubble = memo(function MessageBubble({
           </div>
         </div>
       </div>
+
+      {/* ── Image preview ── */}
+      {previewIndex !== null && (() => {
+        const full = message.attachments ?? [];
+        const imgAtts = full.filter((a) => a.type === "image");
+        const imgs = imgAtts.map((a) => {
+          const origIdx = full.indexOf(a);
+          return { url: attachmentUrls[origIdx] || a.url, name: a.name };
+        });
+        return (
+          <ImagePreview
+            images={imgs}
+            initialIndex={Math.min(previewIndex, imgs.length - 1)}
+            onClose={() => setPreviewIndex(null)}
+          />
+        );
+      })()}
 
       {/* ── Delete bottom sheet ── */}
       {showDeleteSheet && (

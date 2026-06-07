@@ -73,6 +73,7 @@ function Avatar({ user }) {
       <img
         src={user.profile.avatarUrl}
         alt=""
+        loading="lazy"
         onError={() => setImgErr(true)}
         style={{
           width: 34, height: 34, borderRadius: "50%",
