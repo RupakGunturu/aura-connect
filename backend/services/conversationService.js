@@ -1,4 +1,5 @@
 import { Conversation } from '../models/Conversation.js';
+import { Message } from '../models/Message.js';
 
 export async function getUserConversations(userId) {
   return Conversation.find({ participants: userId })
@@ -17,7 +18,16 @@ export async function getConversationById(conversationId) {
     .lean();
 }
 
+export async function findExistingConversation(participantIds) {
+  const sorted = [...participantIds].sort();
+  return Conversation.findOne({
+    participants: { $all: sorted, $size: sorted.length }
+  }).lean();
+}
+
 export async function createConversation(participants, title, isPrivate = true) {
+  const existing = await findExistingConversation(participants);
+  if (existing) return existing;
   const conversation = new Conversation({ participants, title, isPrivate });
   return conversation.save();
 }
@@ -64,6 +74,14 @@ export async function clearConversationHistory(conversationId, userId) {
     { $set: { [`clearedHistoryAt.${userId}`]: new Date() } },
     { new: true },
   ).lean();
+}
+
+export async function deleteConversationForever(conversationId) {
+  const conversation = await Conversation.findById(conversationId).lean();
+  if (!conversation) return null;
+  await Message.deleteMany({ conversationId });
+  await Conversation.findByIdAndDelete(conversationId);
+  return conversation;
 }
 
 export async function removeParticipant(conversationId, userId) {

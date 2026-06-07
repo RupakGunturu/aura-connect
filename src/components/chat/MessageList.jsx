@@ -3,12 +3,7 @@ import { Pin } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import MessageBubble from "./MessageBubble";
 
-const MessageList = memo(function MessageList({ messages, currentUserId, participants, decryptMessage, decryptAttachment, onReply, onDelete, isSearching, pinnedMessages, onPin, onForward, onLoadOlder, hasMore, loadingMore }) {
-  const sortedMessages = useMemo(
-    () => [...messages].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)),
-    [messages],
-  );
-
+const MessageList = memo(function MessageList({ messages, currentUserId, participants, decryptMessage, decryptAttachment, onReply, onDelete, onDeleteForever, isSearching, pinnedMessages, onPin, onForward, onLoadOlder, hasMore, loadingMore }) {
   const pinnedIds = useMemo(
     () => new Set(pinnedMessages?.map((p) => p.messageId?._id || p.messageId) ?? []),
     [pinnedMessages],
@@ -16,7 +11,7 @@ const MessageList = memo(function MessageList({ messages, currentUserId, partici
 
   const virtuosoRef = useRef(null);
 
-  if (sortedMessages.length === 0) {
+  if (messages.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center py-12 text-sm text-muted-foreground">
         {isSearching ? "No messages match your search" : "No messages yet. Say hello!"}
@@ -54,7 +49,7 @@ const MessageList = memo(function MessageList({ messages, currentUserId, partici
       <div className="flex-1">
         <Virtuoso
           ref={virtuosoRef}
-          data={sortedMessages}
+          data={messages}
           className="h-full"
           followOutput="smooth"
           startReached={onLoadOlder}
@@ -86,6 +81,7 @@ const MessageList = memo(function MessageList({ messages, currentUserId, partici
                   decryptAttachment={decryptAttachment}
                   onReply={onReply}
                   onDelete={onDelete}
+                  onDeleteForever={onDeleteForever}
                   onPin={onPin}
                   isPinned={pinnedIds.has(msg._id)}
                   onForward={onForward}

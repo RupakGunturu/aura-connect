@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Phone, Video, MoreVertical, Trash2, Search, X, Timer } from "lucide-react";
+import { ArrowLeft, Phone, Video, MoreVertical, Trash2, Search, X, Timer, AlertTriangle } from "lucide-react";
 import { Avatar } from "./ConversationList";
 
 const DISAPPEAR_OPTIONS = [
@@ -24,6 +24,7 @@ export default function ChatHeader({
   onVoiceCall,
   onVideoCall,
   onClearHistory,
+  onDeletePermanently,
   onSearch,
   disappearDuration,
   onSetDisappear,
@@ -31,12 +32,13 @@ export default function ChatHeader({
   const [showMenu, setShowMenu] = useState(false);
   const [showDisappear, setShowDisappear] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const other =
     conversation?.participants?.find((p) => p._id !== currentUserId) ??
     conversation?.participants?.[0];
 
-  if (typeof window !== "undefined" && other) {
+  if (import.meta.env.DEV && typeof window !== "undefined" && other) {
     console.debug("[ChatHeader] other profile:", other.profile?.name, "avatarUrl:", other.profile?.avatarUrl ? other.profile.avatarUrl.slice(0, 60) + "…" : "none");
   }
 
@@ -184,6 +186,16 @@ export default function ChatHeader({
                       <Trash2 className="size-4" />
                       Delete total history
                     </button>
+                    <button
+                      onClick={() => {
+                        setShowMenu(false);
+                        setShowDeleteConfirm(true);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
+                    >
+                      <AlertTriangle className="size-4" />
+                      Delete permanently
+                    </button>
                   </motion.div>
                 </>
               )}
@@ -191,6 +203,43 @@ export default function ChatHeader({
             </div>
           </div>
         </div>
+      )}
+
+      {showDeleteConfirm && (
+        <>
+          <div className="fixed inset-0 z-50 bg-black/60" onClick={() => setShowDeleteConfirm(false)} />
+          <div className="fixed left-1/2 top-1/2 z-50 w-[90vw] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-card p-6 shadow-xl">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-full bg-destructive/15">
+                <AlertTriangle className="size-5 text-destructive" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Delete permanently?</p>
+                <p className="text-xs text-muted-foreground">This cannot be undone</p>
+              </div>
+            </div>
+            <p className="mb-6 text-sm text-muted-foreground">
+              This will permanently delete this conversation and all messages for both you and the other person. This action cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 rounded-xl border border-border bg-card py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  onDeletePermanently?.();
+                }}
+                className="flex-1 rounded-xl bg-destructive py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+              >
+                Delete permanently
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

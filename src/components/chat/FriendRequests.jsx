@@ -3,7 +3,7 @@ import { Check, X, UserPlus, UserMinus, ArrowLeft, Loader2 } from "lucide-react"
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 
-export default function FriendRequests({ onBack }) {
+export default function FriendRequests({ onBack, onStartConversation }) {
   const { token, user } = useAuth();
   const [tab, setTab] = useState("requests");
   const [incoming, setIncoming] = useState([]);
@@ -146,7 +146,11 @@ export default function FriendRequests({ onBack }) {
               <p className="py-12 text-center text-sm text-muted-foreground">No friends yet</p>
             ) : (
               friends.map((f) => (
-                <div key={f._id} className="flex items-center gap-3 rounded-xl px-3 py-2.5">
+                <div
+                  key={f._id}
+                  onClick={() => onStartConversation?.(f._id)}
+                  className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-card/60"
+                >
                     <AvatarImg src={f.profile?.avatarUrl} name={f.profile?.name} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{f.profile?.name ?? "Unknown"}</p>

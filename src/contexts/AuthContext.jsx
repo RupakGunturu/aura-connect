@@ -37,7 +37,7 @@ export function AuthProvider({ children }) {
     }
     sessionStorage.setItem("redirect_after_login", window.location.pathname);
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
+    const timeout = setTimeout(() => controller.abort(), 2000);
     fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -149,8 +149,11 @@ export function AuthProvider({ children }) {
   }, [token, user?.id]);
 
   useEffect(() => {
-    if (token) registerPush(token);
-    else unregisterPush();
+    if (token) {
+      const id = setTimeout(() => registerPush(token), 2000);
+      return () => clearTimeout(id);
+    }
+    unregisterPush();
   }, [token]);
 
   const logout = useCallback(async () => {

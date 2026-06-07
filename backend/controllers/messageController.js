@@ -1,4 +1,4 @@
-import { createMessage, getConversationMessages, markMessageDelivered, markMessageRead, softDeleteMessage } from '../services/messageService.js';
+import { createMessage, getConversationMessages, markMessageDelivered, markMessageRead, softDeleteMessage, hardDeleteMessage } from '../services/messageService.js';
 import { notifyOfflineParticipants } from '../services/pushService.js';
 import { requireFields } from '../utils/validation.js';
 
@@ -78,6 +78,30 @@ export async function deleteMessage(req, res, next) {
     }
 
     res.status(200).json({ message });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteMessageForever(req, res, next) {
+  try {
+    const message = await hardDeleteMessage(req.params.messageId, req.user.id);
+    if (!message) {
+      const error = new Error('Message not found');
+      error.status = 404;
+      throw error;
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`conversation:${message.conversationId}`).emit('messageDeleted', {
+        messageId: message._id,
+        conversationId: message.conversationId,
+        permanent: true,
+      });
+    }
+
+    res.status(200).json({ success: true });
   } catch (error) {
     next(error);
   }

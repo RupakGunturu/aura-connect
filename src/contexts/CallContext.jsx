@@ -36,12 +36,14 @@ export function CallProvider({ children }) {
     activeCallRef.current = null;
   }, []);
 
-  useEffect(() => {
-    if (!token) return;
-    api("/ice-servers", { token }).then((data) => {
-      if (data?.iceServers?.length) setIceServers(data.iceServers);
-    }).catch(() => {});
-  }, [token]);
+  async function ensureIceServers() {
+    try {
+      const data = await api("/ice-servers", { token });
+      if (data?.iceServers?.length) {
+        setIceServers(data.iceServers);
+      }
+    } catch {}
+  }
 
   useEffect(() => {
     iceServersRef.current = iceServers;
@@ -119,6 +121,7 @@ export function CallProvider({ children }) {
   const startCall = useCallback(
     async (targetId, type, targetName) => {
       try {
+        await ensureIceServers();
         const stream = await navigator.mediaDevices.getUserMedia(
           type === "video" ? { video: true, audio: true } : { audio: true },
         );
@@ -164,6 +167,7 @@ export function CallProvider({ children }) {
     if (!incomingCall) return;
     const { callId, callerId, callerName, type } = incomingCall;
     try {
+      await ensureIceServers();
       const stream = await navigator.mediaDevices.getUserMedia(
         type === "video" ? { video: true, audio: true } : { audio: true },
       );

@@ -1,6 +1,5 @@
-import { createConversation, getConversationById, getUserConversations, addParticipant, removeParticipant, pinMessage, unpinMessage, setDisappearDuration } from '../services/conversationService.js';
+import { createConversation, getConversationById, getUserConversations, addParticipant, removeParticipant, pinMessage, unpinMessage, setDisappearDuration, clearConversationHistory, deleteConversationForever as deleteConversationService } from '../services/conversationService.js';
 import { markConversationRead } from '../services/messageService.js';
-import { clearConversationHistory } from '../services/conversationService.js';
 import { requireFields } from '../utils/validation.js';
 import { requireConversationMember } from '../utils/membership.js';
 
@@ -141,6 +140,31 @@ export async function clearHistory(req, res, next) {
   try {
     await requireConversationMember(req.params.conversationId, req.user.id);
     await clearConversationHistory(req.params.conversationId, req.user.id);
+    res.status(200).json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteConversationForever(req, res, next) {
+  try {
+    await requireConversationMember(req.params.conversationId, req.user.id);
+    const conversation = await deleteConversationService(req.params.conversationId);
+    if (!conversation) {
+      const error = new Error('Conversation not found');
+      error.status = 404;
+      throw error;
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      for (const pid of conversation.participants) {
+        io.to(`user:${pid}`).emit('conversationDeleted', {
+          conversationId: req.params.conversationId,
+        });
+      }
+    }
+
     res.status(200).json({ success: true });
   } catch (error) {
     next(error);

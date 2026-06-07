@@ -117,7 +117,7 @@ function ReadStatus({ delivered, read }) {
 }
 
 /* ─── Confirm delete sheet (mobile-friendly bottom-anchored) ─── */
-function DeleteSheet({ onConfirm, onCancel }) {
+function DeleteSheet({ text, confirmLabel, onConfirm, onCancel }) {
   return (
     <AnimatePresence>
       <motion.div
@@ -154,7 +154,7 @@ function DeleteSheet({ onConfirm, onCancel }) {
             fontSize: 13, color: ds.textMuted, textAlign: "center",
             marginBottom: 16, fontFamily: ds.font.body,
           }}>
-            Delete this message for everyone?
+            {text}
           </p>
           <button
             onClick={onConfirm}
@@ -170,7 +170,7 @@ function DeleteSheet({ onConfirm, onCancel }) {
               marginBottom: 10,
             }}
           >
-            Delete message
+            {confirmLabel}
           </button>
           <button
             onClick={onCancel}
@@ -194,12 +194,13 @@ function DeleteSheet({ onConfirm, onCancel }) {
 }
 
 /* ─── Context action bar (shown on long-press / right-click) ─── */
-function ActionBar({ isOwn, onReply, onForward, onPin, onDelete, onClose }) {
+function ActionBar({ isOwn, onReply, onForward, onPin, onDelete, onDeleteForever, onClose }) {
   const actions = [
     onReply && { icon: <Reply size={16} />, label: "Reply", cb: onReply },
     onForward && { icon: <Forward size={16} />, label: "Forward", cb: onForward },
     onPin && { icon: <Pin size={16} />, label: "Pin", cb: onPin },
-    isOwn && onDelete && { icon: <Trash2 size={16} />, label: "Delete", cb: onDelete, danger: true },
+    isOwn && onDelete && { icon: <Trash2 size={16} />, label: "Remove", cb: onDelete, danger: true },
+    isOwn && onDeleteForever && { icon: <Trash2 size={16} />, label: "Delete for everyone", cb: onDeleteForever, danger: true },
   ].filter(Boolean);
 
   return (
@@ -256,10 +257,11 @@ function ActionBar({ isOwn, onReply, onForward, onPin, onDelete, onClose }) {
 const MessageBubble = memo(function MessageBubble({
   message, isOwn, sender,
   decryptMessage, decryptAttachment,
-  onReply, onDelete, onPin, isPinned, onForward,
+  onReply, onDelete, onPin, isPinned, onForward, onDeleteForever,
 }) {
   const [showActions, setShowActions] = useState(false);
   const [showDeleteSheet, setShowDeleteSheet] = useState(false);
+  const [showDeleteForeverSheet, setShowDeleteForeverSheet] = useState(false);
   const [decryptedBody, setDecryptedBody] = useState(null);
   const [replyPreview, setReplyPreview] = useState(null);
   const [replySenderName, setReplySenderName] = useState("");
@@ -414,6 +416,7 @@ const MessageBubble = memo(function MessageBubble({
               onForward={onForward ? () => onForward(message) : null}
               onPin={onPin ? () => onPin(message) : null}
               onDelete={isOwn && onDelete ? () => { setShowActions(false); setShowDeleteSheet(true); } : null}
+              onDeleteForever={isOwn && onDeleteForever ? () => { setShowActions(false); setShowDeleteForeverSheet(true); } : null}
               onClose={() => setShowActions(false)}
             />
           )}
@@ -592,11 +595,23 @@ const MessageBubble = memo(function MessageBubble({
         );
       })()}
 
-      {/* ── Delete bottom sheet ── */}
+      {/* ── Remove bottom sheet ── */}
       {showDeleteSheet && (
         <DeleteSheet
+          text="Remove this message for you?"
+          confirmLabel="Remove"
           onConfirm={() => { onDelete?.(message); setShowDeleteSheet(false); }}
           onCancel={() => setShowDeleteSheet(false)}
+        />
+      )}
+
+      {/* ── Delete for everyone sheet ── */}
+      {showDeleteForeverSheet && (
+        <DeleteSheet
+          text="Delete this message for everyone?"
+          confirmLabel="Delete for everyone"
+          onConfirm={() => { onDeleteForever?.(message); setShowDeleteForeverSheet(false); }}
+          onCancel={() => setShowDeleteForeverSheet(false)}
         />
       )}
     </motion.div>

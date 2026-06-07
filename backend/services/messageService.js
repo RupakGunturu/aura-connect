@@ -90,6 +90,18 @@ export async function softDeleteMessage(messageId, userId) {
   return message.save();
 }
 
+export async function hardDeleteMessage(messageId, userId) {
+  const message = await Message.findById(messageId);
+  if (!message) return null;
+  if (message.senderId.toString() !== userId) {
+    const err = new Error('Not authorized to delete this message');
+    err.status = 403;
+    throw err;
+  }
+  await Message.findByIdAndDelete(messageId);
+  return message;
+}
+
 export async function markConversationRead(conversationId, userId) {
   await Conversation.findByIdAndUpdate(conversationId, {
     $set: { [`unreadCounts.${userId}`]: 0 },

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -7,16 +7,18 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { CallProvider } from "@/contexts/CallContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppShell } from "@/components/layout/AppShell";
-import IncomingCallModal from "@/components/calls/IncomingCallModal";
-import ActiveCallOverlay from "@/components/calls/ActiveCallOverlay";
-import Chat from "./pages/Chat";
-import Onboarding from "./pages/Onboarding";
-import Profile from "./pages/Profile";
-import Calls from "./pages/Calls";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import NotFound from "./pages/NotFound";
+import LoadingScreen from "@/components/LoadingScreen";
 import { requestNotificationPermission } from "@/lib/notifications";
+
+const Chat = lazy(() => import("./pages/Chat"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Calls = lazy(() => import("./pages/Calls"));
+const Login = lazy(() => import("./pages/Login"));
+const Signup = lazy(() => import("./pages/Signup"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const IncomingCallModal = lazy(() => import("@/components/calls/IncomingCallModal"));
+const ActiveCallOverlay = lazy(() => import("@/components/calls/ActiveCallOverlay"));
 
 const queryClient = new QueryClient();
 
@@ -39,8 +41,11 @@ const App = () => {
           theme="dark"
         />
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <IncomingCallModal />
-          <ActiveCallOverlay />
+          <Suspense fallback={null}>
+            <IncomingCallModal />
+            <ActiveCallOverlay />
+          </Suspense>
+          <Suspense fallback={<LoadingScreen />}>
           <Routes>
             <Route path="/" element={<Navigate to="/chat" replace />} />
             <Route
@@ -95,6 +100,7 @@ const App = () => {
             <Route path="/signup" element={<Signup />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </CallProvider>
     </AuthProvider>

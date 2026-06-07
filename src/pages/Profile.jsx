@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
@@ -191,9 +191,9 @@ export default function Profile() {
 
   const isOwnProfile = !handle || handle === user?.profile?.handle;
 
-  const currentSessionId = token
+  const currentSessionId = useMemo(() => token
     ? (() => { try { return JSON.parse(atob(token.split(".")[1])).sessionId; } catch { return null; } })()
-    : null;
+    : null, [token]);
 
   const profileId = profile?._id ?? profile?.id;
   const isOnline = isOwnProfile

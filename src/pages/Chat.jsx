@@ -391,6 +391,17 @@ export default function Chat() {
 
   const activeConversation = conversations.find((c) => c._id === conversationId);
 
+  const existingParticipantIds = useMemo(() => {
+    const ids = new Set();
+    for (const conv of conversations) {
+      for (const p of conv.participants || []) {
+        ids.add(typeof p === "string" ? p : p._id);
+      }
+    }
+    ids.delete(user?.id);
+    return ids;
+  }, [conversations, user?.id]);
+
   function otherParticipant(conversation) {
     return (
       conversation?.participants?.find((p) => p._id !== user?.id) ??
@@ -399,7 +410,10 @@ export default function Chat() {
   }
 
   /* ─── e2ee ──────────────────────────────────────────────────────────────── */
+  const e2eeInitCache = useRef({});
   async function initE2EE() {
+    if (e2eeInitCache.current[user?.id]) return;
+    e2eeInitCache.current[user?.id] = true;
     try {
       setCurrentUser(user.id);
       setE2eeReady(true);
@@ -443,7 +457,7 @@ export default function Chat() {
         }
       }
     } catch (err) {
-      console.error("E2EE init failed", err);
+      if (import.meta.env.DEV) console.error("E2EE init failed", err);
     }
   }
 
@@ -496,7 +510,7 @@ export default function Chat() {
         ]);
         return secret;
       } catch (err) {
-        console.error("getSharedSecret:", err);
+        if (import.meta.env.DEV) console.error("getSharedSecret:", err);
         return null;
       }
     })();
@@ -539,8 +553,10 @@ export default function Chat() {
     const onFriendReqAccepted = () => toast.success("Friend request accepted!");
     const onMessagePinned = () => loadConversations();
     const onMessageUnpinned = () => loadConversations();
-    const onMessageDeleted = ({ messageId }) =>
-      setMessages((p) => p.map((m) => m._id === messageId ? { ...m, deletedAt: new Date().toISOString() } : m));
+    const onMessageDeleted = ({ messageId, permanent }) =>
+      permanent
+        ? setMessages((p) => p.filter((m) => m._id !== messageId))
+        : setMessages((p) => p.map((m) => m._id === messageId ? { ...m, deletedAt: new Date().toISOString() } : m));
     const onConversationRead = ({ conversationId: cid }) =>
       setMessages((p) => p.map((m) => m.conversationId === cid && m.senderId !== user?.id ? { ...m, read: true } : m));
     const onTypingStart = ({ userId: uid }) => {
@@ -563,6 +579,13 @@ export default function Chat() {
         setUnreadCounts((p) => ({ ...p, [msg.conversationId]: (p[msg.conversationId] || 0) + 1 }));
     };
 
+    const onConversationDeleted = ({ conversationId: cid }) => {
+      if (cid === conversationIdRef.current) {
+        navigate("/chat");
+      }
+      setConversations((p) => p.filter((c) => c._id !== cid));
+    };
+
     s.on("userOnline", onUserOnline);
     s.on("userOffline", onUserOffline);
     s.on("friendRequestAccepted", onFriendReqAccepted);
@@ -573,6 +596,7 @@ export default function Chat() {
     s.on("typing:start", onTypingStart);
     s.on("typing:stop", onTypingStop);
     s.on("message", onMessage);
+    s.on("conversationDeleted", onConversationDeleted);
     s.emit("online");
 
     return () => {
@@ -586,6 +610,7 @@ export default function Chat() {
       s.off("typing:start", onTypingStart);
       s.off("typing:stop", onTypingStop);
       s.off("message", onMessage);
+      s.off("conversationDeleted", onConversationDeleted);
       setTypingUsers(new Set());
       s.emit("offline");
     };
@@ -609,6 +634,7 @@ export default function Chat() {
     try {
       const params = new URLSearchParams();
       if (before) params.set("before", before);
+      else params.set("limit", "50");
       const qs = params.toString();
       const data = await api(`/messages/${id}${qs ? `?${qs}` : ""}`, { token });
       const msgs = data.messages ?? [];
@@ -790,7 +816,7 @@ export default function Chat() {
       });
       textareaRef.current?.focus();
     } catch (err) {
-      console.error("sendMessage:", err.message);
+      if (import.meta.env.DEV) console.error("sendMessage:", err.message);
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
       toast.error("Failed to send message");
     } finally {
@@ -817,6 +843,14 @@ export default function Chat() {
   }
 
   async function startConversation(targetUserId) {
+    const existing = conversations.find((c) =>
+      c.participants?.some((p) => (typeof p === "string" ? p : p._id) === targetUserId)
+    );
+    if (existing) {
+      setShowSearch(false); setSearchQuery(""); setSearchResults([]);
+      navigate(`/chat/${existing._id}`);
+      return;
+    }
     try {
       const data = await api("/conversations", {
         method: "POST",
@@ -850,6 +884,14 @@ export default function Chat() {
     try {
       await api(`/messages/${msg._id}/delete`, { method: "POST", token });
       setMessages((p) => p.map((m) => m._id === msg._id ? { ...m, deletedAt: new Date().toISOString() } : m));
+    } catch { toast.error("Failed to delete message"); }
+  }
+
+  async function handleDeleteForever(msg) {
+    if (!msg._id) return;
+    try {
+      await api(`/messages/${msg._id}`, { method: "DELETE", token });
+      setMessages((p) => p.filter((m) => m._id !== msg._id));
     } catch { toast.error("Failed to delete message"); }
   }
 
@@ -904,6 +946,14 @@ export default function Chat() {
     } catch { toast.error("Failed to clear history"); }
   }
 
+  async function handleDeletePermanently() {
+    if (!conversationId) return;
+    try {
+      await api(`/conversations/${conversationId}`, { method: "DELETE", token });
+      navigate("/chat");
+    } catch { toast.error("Failed to delete conversation"); }
+  }
+
   async function handleMessageSearch(query) {
     setMessageSearchQuery(query);
     if (!query.trim()) { setMatchingMessageIds(null); return; }
@@ -922,10 +972,18 @@ export default function Chat() {
     setMatchingMessageIds(matched);
   }
 
+  const typingTimerRef = useRef(null);
   const emitTyping = useCallback((isTyping) => {
     const cid = conversationIdRef.current;
     if (!cid || !socketRef.current) return;
-    socketRef.current.emit(isTyping ? "typing:start" : "typing:stop", { conversationId: cid });
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    if (isTyping) {
+      typingTimerRef.current = setTimeout(() => {
+        socketRef.current.emit("typing:start", { conversationId: cid });
+      }, 400);
+    } else {
+      socketRef.current.emit("typing:stop", { conversationId: cid });
+    }
   }, []);
 
   async function handleUploadFile(file, type = "file") {
@@ -933,6 +991,12 @@ export default function Chat() {
     const peer = otherParticipant(activeConversation);
     const secret = peer ? await getSharedSecret(peer._id) : null;
     const counter = ++messageCounterRef.current;
+    if (!secret) {
+      const ok = window.confirm(
+        "End-to-end encryption is not ready yet. This file will be sent without encryption. Continue?"
+      );
+      if (!ok) return;
+    }
     try {
       let attachment; let metadata = {};
       if (secret) {
@@ -955,7 +1019,7 @@ export default function Chat() {
       const response = await api("/messages", { method: "POST", body: JSON.stringify({ conversationId, attachments: [attachment], metadata }), token });
       setMessages((p) => p.some((m) => m._id === response.message._id) ? p : [...p, response.message]);
     } catch (err) {
-      console.error("Upload error:", err);
+      if (import.meta.env.DEV) console.error("Upload error:", err);
       toast.error(err?.message || "Failed to upload file");
     }
   }
@@ -986,14 +1050,14 @@ export default function Chat() {
         className={`flex-col overflow-hidden h-full ${!conversationId ? "flex" : "hidden"} md:flex chat-sidebar`}
       >
         {showFriends ? (
-          <FriendRequests onBack={() => setShowFriends(false)} />
+          <FriendRequests onBack={() => setShowFriends(false)} onStartConversation={startConversation} />
         ) : showSearch ? (
           <AddFriend
             show={showSearch}
             onToggle={() => setShowSearch(false)}
             searchQuery={searchQuery}
             onSearch={handleSearch}
-            searchResults={searchResults}
+            searchResults={searchResults.filter((u) => !existingParticipantIds.has(u._id))}
             onStartConversation={startConversation}
             onSendFriendRequest={handleSendFriendRequest}
             onShowFriends={() => setShowFriends(true)}
@@ -1107,10 +1171,11 @@ export default function Chat() {
               onBack={() => navigate("/chat")}
               onVoiceCall={(peerId, name) => startCall(peerId, "voice", name)}
               onVideoCall={(peerId, name) => startCall(peerId, "video", name)}
-              onClearHistory={handleClearHistory}
-              onSearch={handleMessageSearch}
-              disappearDuration={activeConversation?.disappearDuration ?? 0}
-              onSetDisappear={handleSetDisappear}
+               onClearHistory={handleClearHistory}
+               onDeletePermanently={handleDeletePermanently}
+               onSearch={handleMessageSearch}
+               disappearDuration={activeConversation?.disappearDuration ?? 0}
+               onSetDisappear={handleSetDisappear}
             />
 
             <MessageList
@@ -1121,6 +1186,7 @@ export default function Chat() {
               decryptAttachment={handleDecryptAttachment}
               onReply={handleReply}
               onDelete={handleDelete}
+              onDeleteForever={handleDeleteForever}
               isSearching={!!messageSearchQuery}
               pinnedMessages={pinnedMessages}
               onPin={handlePin}
