@@ -1184,13 +1184,9 @@ export default function Chat() {
               participants={activeConversation?.participants}
               decryptMessage={handleDecryptMessage}
               decryptAttachment={handleDecryptAttachment}
-              onReply={handleReply}
               onDelete={handleDelete}
               onDeleteForever={handleDeleteForever}
               isSearching={!!messageSearchQuery}
-              pinnedMessages={pinnedMessages}
-              onPin={handlePin}
-              onForward={(msg) => setForwardTarget(msg)}
               onLoadOlder={loadOlderMessages}
               hasMore={hasMore}
               loadingMore={loadingMore}

@@ -36,13 +36,10 @@ export function AuthProvider({ children }) {
       return;
     }
     sessionStorage.setItem("redirect_after_login", window.location.pathname);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
     fetch(`${API_URL}/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      signal: controller.signal,
     })
       .then(async (res) => {
         const text = await res.text();
@@ -51,15 +48,12 @@ export function AuthProvider({ children }) {
           sessionStorage.removeItem("redirect_after_login");
           setToken(data.accessToken);
           setUser(data.user);
-        } else {
+        } else if (res.status === 401) {
           localStorage.removeItem(SESSION_FLAG);
         }
       })
-      .catch(() => {
-        localStorage.removeItem(SESSION_FLAG);
-      })
+      .catch(() => {})
       .finally(() => {
-        clearTimeout(timeout);
         setReady(true);
       });
   }, []);

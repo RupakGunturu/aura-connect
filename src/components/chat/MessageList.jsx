@@ -1,14 +1,8 @@
-import { useMemo, memo, useRef } from "react";
-import { Pin } from "lucide-react";
+import { memo, useRef } from "react";
 import { Virtuoso } from "react-virtuoso";
 import MessageBubble from "./MessageBubble";
 
-const MessageList = memo(function MessageList({ messages, currentUserId, participants, decryptMessage, decryptAttachment, onReply, onDelete, onDeleteForever, isSearching, pinnedMessages, onPin, onForward, onLoadOlder, hasMore, loadingMore }) {
-  const pinnedIds = useMemo(
-    () => new Set(pinnedMessages?.map((p) => p.messageId?._id || p.messageId) ?? []),
-    [pinnedMessages],
-  );
-
+const MessageList = memo(function MessageList({ messages, currentUserId, participants, decryptMessage, decryptAttachment, onDelete, onDeleteForever, isSearching, onLoadOlder, hasMore, loadingMore }) {
   const virtuosoRef = useRef(null);
 
   if (messages.length === 0) {
@@ -21,32 +15,7 @@ const MessageList = memo(function MessageList({ messages, currentUserId, partici
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {pinnedMessages?.length > 0 && (
-        <div className="shrink-0 border-b border-border bg-card/50 px-4 py-3">
-          <div className="mb-2 flex items-center gap-1.5 text-xs text-brand">
-            <Pin className="size-3" />
-            <span className="font-semibold">Pinned messages</span>
-          </div>
-          <div className="space-y-1.5">
-            {pinnedMessages.map((p) => {
-              const msg = p.messageId;
-              if (!msg) return null;
-              return (
-                <div
-                  key={msg._id}
-                  className="cursor-pointer truncate rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-card"
-                  onClick={() => {
-                    document.getElementById(`msg-${msg._id}`)?.scrollIntoView({ behavior: "smooth" });
-                  }}
-                >
-                  {msg.body || (msg.encryptedPayload ? "Encrypted message" : "📎 Media")}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      <div className="flex-1">
+      <div className="flex-1 overflow-hidden">
         <Virtuoso
           ref={virtuosoRef}
           data={messages}
@@ -79,12 +48,8 @@ const MessageList = memo(function MessageList({ messages, currentUserId, partici
                   sender={sender}
                   decryptMessage={decryptMessage}
                   decryptAttachment={decryptAttachment}
-                  onReply={onReply}
                   onDelete={onDelete}
                   onDeleteForever={onDeleteForever}
-                  onPin={onPin}
-                  isPinned={pinnedIds.has(msg._id)}
-                  onForward={onForward}
                 />
               </div>
             );
