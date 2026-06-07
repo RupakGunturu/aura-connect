@@ -71,12 +71,12 @@ export function AppShell({ children }) {
         </div>
       </aside>
 
-      <main className="relative z-10 flex min-w-0 flex-1 overflow-y-auto max-md:pb-16">
+      <main className="relative z-10 flex min-w-0 flex-1 overflow-y-auto max-md:pb-[calc(64px+env(safe-area-inset-bottom,0px))]">
         {children}
       </main>
 
       {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-20 flex items-center justify-around border-t border-border bg-background/80 px-4 py-2 backdrop-blur-md md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-20 flex items-center justify-around border-t border-border bg-background/80 px-4 pb-[env(safe-area-inset-bottom,0px)] py-2 backdrop-blur-md md:hidden">
         <Link
           to="/chat"
           className={`relative flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] ${

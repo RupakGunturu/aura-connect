@@ -46,7 +46,7 @@ export default function ChatHeader({
   }
 
   return (
-    <div className="border-b border-border">
+    <div className="sticky top-0 z-10 border-b border-border bg-[#111111]">
       {showSearch ? (
         <div className="flex items-center gap-2 px-4 py-2.5">
           <button

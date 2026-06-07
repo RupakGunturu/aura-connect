@@ -1,4 +1,4 @@
-import { useMemo, memo } from "react";
+import { useMemo, memo, useRef } from "react";
 import { Pin } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import MessageBubble from "./MessageBubble";
@@ -13,6 +13,8 @@ const MessageList = memo(function MessageList({ messages, currentUserId, partici
     () => new Set(pinnedMessages?.map((p) => p.messageId?._id || p.messageId) ?? []),
     [pinnedMessages],
   );
+
+  const virtuosoRef = useRef(null);
 
   if (sortedMessages.length === 0) {
     return (

@@ -61,16 +61,11 @@ const S = {
 
   /* sidebar */
   sidebar: {
-    display: "flex",
-    flexDirection: "column",
     width: "320px",
     minWidth: "320px",
-    height: "100%",
     background: "#111111",
     borderRight: "1px solid #1f1f1f",
-    overflow: "hidden",
   },
-  sidebarHidden: { display: "none" },
   sidebarHeader: {
     display: "flex",
     alignItems: "center",
@@ -192,15 +187,10 @@ const S = {
 
   /* main chat area */
   chatArea: {
-    display: "flex",
-    flexDirection: "column",
     flex: 1,
-    height: "100%",
-    overflow: "hidden",
     background: "#0d0d0d",
     minWidth: 0,
   },
-  chatAreaHidden: { display: "none" },
 
   /* chat header */
   chatHeader: {
@@ -987,20 +977,13 @@ export default function Chat() {
       ? messages.filter((m) => matchingMessageIds.has(m._id))
       : messages;
 
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const showSidebar = !conversationId || !isMobile;
-  const showChat = conversationId || !isMobile;
-
   /* ─── render ─────────────────────────────────────────────────────────────── */
   return (
     <div style={S.root}>
       {/* ── SIDEBAR ── */}
       <div
-        style={{
-          ...S.sidebar,
-          ...(conversationId && isMobile ? S.sidebarHidden : {}),
-        }}
-        className="chat-sidebar"
+        style={S.sidebar}
+        className={`flex-col overflow-hidden h-full ${!conversationId ? "flex" : "hidden"} md:flex chat-sidebar`}
       >
         {showFriends ? (
           <FriendRequests onBack={() => setShowFriends(false)} />
@@ -1112,11 +1095,8 @@ export default function Chat() {
 
       {/* ── CHAT AREA ── */}
       <div
-        style={{
-          ...S.chatArea,
-          ...(!conversationId && isMobile ? S.chatAreaHidden : {}),
-        }}
-        className="chat-main"
+        style={S.chatArea}
+        className={`flex-col overflow-hidden h-full ${conversationId ? "flex" : "hidden"} md:flex chat-main`}
       >
         {conversationId && activeConversation ? (
           <>
@@ -1262,28 +1242,16 @@ export default function Chat() {
         />
       )}
 
-      {/* Responsive CSS */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap');
-
         * { box-sizing: border-box; }
-
         .chat-sidebar::-webkit-scrollbar,
         .chat-main::-webkit-scrollbar { width: 4px; }
         .chat-sidebar::-webkit-scrollbar-track,
         .chat-main::-webkit-scrollbar-track { background: transparent; }
         .chat-sidebar::-webkit-scrollbar-thumb,
         .chat-main::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
-
         @media (max-width: 768px) {
-          .chat-sidebar {
-            width: 100% !important;
-            min-width: 100% !important;
-            display: ${conversationId ? "none" : "flex"} !important;
-          }
-          .chat-main {
-            display: ${conversationId ? "flex" : "none"} !important;
-          }
+          .chat-sidebar { width: 100% !important; min-width: 100% !important; }
         }
       `}</style>
     </div>
