@@ -1,5 +1,6 @@
 import { memo, useState } from "react";
-import { MessageCircle, ChevronDown } from "lucide-react";
+import { MessageCircle } from "lucide-react";
+import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const Avatar = memo(function Avatar({ user, size = "md" }) {
@@ -19,6 +20,13 @@ const LastMessagePreview = memo(function LastMessagePreview({ message }) {
   const text = message.encryptedPayload ? "🔒 Encrypted message" : message.body || "Attachment";
   return <span className="truncate text-xs text-muted-foreground">{text}</span>;
 });
+
+const conversationSpring = {
+  type: "spring",
+  stiffness: 400,
+  damping: 35,
+  mass: 0.5,
+};
 
 const ConversationList = memo(function ConversationList({
   conversations,
@@ -56,10 +64,11 @@ const ConversationList = memo(function ConversationList({
             const isOnline = onlineUsers.has(other?._id);
             const unread = unreadCounts[c._id] || 0;
             return (
-              <button
+              <motion.button
                 key={c._id}
+                layout={conversationSpring}
                 onClick={() => onSelect(c._id)}
-                className={`flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-card/30 ${
+                className={`flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left hover:bg-card/30 ${
                   c._id === activeId ? "bg-card/50" : ""
                 }`}
               >
@@ -86,13 +95,19 @@ const ConversationList = memo(function ConversationList({
                   <div className="flex items-center justify-between gap-2">
                     <LastMessagePreview message={c.lastMessage} />
                     {unread > 0 && (
-                      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-brand text-[10px] font-bold text-brand-foreground">
+                      <motion.span
+                        key={`badge-${unread}`}
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ duration: 0.12, ease: [0.16, 1, 0.3, 1] }}
+                        className="flex size-5 shrink-0 items-center justify-center rounded-full bg-brand text-[10px] font-bold text-brand-foreground"
+                      >
                         {unread > 9 ? "9+" : unread}
-                      </span>
+                      </motion.span>
                     )}
                   </div>
                 </div>
-              </button>
+              </motion.button>
             );
           })
         )}

@@ -17,7 +17,7 @@ export function initializeChatSocket(socket, io) {
       }
       payload.senderId = userId;
       const message = await createMessage(payload);
-      io.to(`conversation:${message.conversationId}`).emit('message', message);
+      socket.to(`conversation:${message.conversationId}`).emit('message', message);
       if (typeof ack === 'function') ack({ success: true, message });
     } catch (err) {
       if (typeof ack === 'function') ack({ success: false, error: err.message });
