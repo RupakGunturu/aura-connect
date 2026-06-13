@@ -10,6 +10,8 @@ import {
   Clock,
   AlertCircle,
   Download,
+  Loader2,
+  Copy,
 } from "lucide-react";
 import ImagePreview from "./ImagePreview";
 
@@ -107,7 +109,9 @@ function DisappearTimer({ expiresAt, isOwn }) {
 }
 
 /* ─── Read receipts ─── */
-function ReadStatus({ delivered, read }) {
+function ReadStatus({ delivered, read, sending }) {
+  if (sending)
+    return <Loader2 size={12} strokeWidth={2} className="animate-spin" style={{ flexShrink: 0, color: "rgba(255,255,255,0.35)" }} />;
   if (read)
     return <CheckCheck size={14} strokeWidth={2.2} color={ds.readBlue} style={{ flexShrink: 0 }} />;
   if (delivered)
@@ -116,6 +120,17 @@ function ReadStatus({ delivered, read }) {
 }
 
 function DeleteOptionsSheet({ onDelete, onDeleteForever, onCancel }) {
+  const btn = {
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+    width: "100%", padding: "14px 16px",
+    border: "0.5px solid rgba(255,255,255,0.1)",
+    borderRadius: 12,
+    fontSize: 15, cursor: "pointer",
+    fontFamily: ds.font.body,
+    outline: "none",
+    WebkitTapHighlightColor: "transparent",
+  };
+
   return (
     <AnimatePresence>
       <motion.div
@@ -128,6 +143,8 @@ function DeleteOptionsSheet({ onDelete, onDeleteForever, onCancel }) {
           display: "flex", flexDirection: "column", justifyContent: "flex-end",
         }}
         onClick={onCancel}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
       >
         <motion.div
           initial={{ y: 60, opacity: 0 }}
@@ -135,6 +152,8 @@ function DeleteOptionsSheet({ onDelete, onDeleteForever, onCancel }) {
           exit={{ y: 60, opacity: 0 }}
           transition={{ type: "spring", stiffness: 340, damping: 30 }}
           onClick={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
           style={{
             background: "#1a1c22",
             borderTop: "0.5px solid rgba(255,255,255,0.1)",
@@ -147,113 +166,172 @@ function DeleteOptionsSheet({ onDelete, onDeleteForever, onCancel }) {
             background: "rgba(255,255,255,0.15)",
             margin: "-8px auto 20px",
           }} />
-          <button
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             onClick={onDelete}
-            style={{
-              width: "100%", padding: "14px",
-              background: "rgba(255,255,255,0.05)",
-              border: "0.5px solid rgba(255,255,255,0.1)",
-              borderRadius: 12,
-              color: ds.text,
-              fontSize: 15,
-              cursor: "pointer",
-              fontFamily: ds.font.body,
-              marginBottom: 10,
-              textAlign: "center",
-            }}
+            style={{ ...btn, background: "rgba(255,255,255,0.05)", marginBottom: 10, textAlign: "center" }}
           >
             Delete for me
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             onClick={onDeleteForever}
-            style={{
-              width: "100%", padding: "14px",
-              background: ds.destructiveDim,
-              border: `0.5px solid ${ds.destructive}44`,
-              borderRadius: 12,
-              color: ds.destructive,
-              fontSize: 15, fontWeight: 600,
-              cursor: "pointer",
-              fontFamily: ds.font.body,
-              marginBottom: 10,
-            }}
+            style={{ ...btn, background: ds.destructiveDim, border: `0.5px solid ${ds.destructive}44`, color: ds.destructive, fontWeight: 600, marginBottom: 10 }}
           >
+            <Trash2 size={16} />
             Delete for everyone
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
             onClick={onCancel}
-            style={{
-              width: "100%", padding: "14px",
-              background: "rgba(255,255,255,0.05)",
-              border: "0.5px solid rgba(255,255,255,0.1)",
-              borderRadius: 12,
-              color: ds.text,
-              fontSize: 15,
-              cursor: "pointer",
-              fontFamily: ds.font.body,
-            }}
+            style={{ ...btn, background: "rgba(255,255,255,0.05)" }}
           >
             Cancel
-          </button>
+          </motion.button>
         </motion.div>
       </motion.div>
     </AnimatePresence>
   );
 }
 
-/* ─── Context action bar (shown on long-press / right-click) ─── */
-function ActionBar({ isOwn, onDelete, onClose }) {
-  const actions = [
-    isOwn && { icon: <Trash2 size={16} />, label: "Delete", cb: onDelete, danger: true },
+/* ─── Context dropdown (desktop right-click) ─── */
+function ContextDropdown({ isOwn, onCopy, onDelete, onClose }) {
+  const items = [
+    { icon: <Copy size={15} />, label: "Copy", handler: onCopy },
+    isOwn && { icon: <Trash2 size={15} />, label: "Delete", handler: onDelete, danger: true },
   ].filter(Boolean);
 
   return (
     <>
-      <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={onClose} />
       <motion.div
-        initial={{ opacity: 0, scale: 0.88, y: 4 }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        style={{ position: "fixed", inset: 0, zIndex: 40 }}
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92, y: -6 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.88, y: 4 }}
-        transition={{ type: "spring", stiffness: 380, damping: 28 }}
+        exit={{ opacity: 0, scale: 0.92, y: -6 }}
+        transition={{ type: "spring", stiffness: 400, damping: 27 }}
         style={{
           position: "absolute",
-          top: -44,
+          bottom: "calc(100% + 6px)",
           [isOwn ? "right" : "left"]: 0,
           zIndex: 50,
-          display: "flex", alignItems: "center", gap: 2,
-          background: "#242630",
-          border: "0.5px solid rgba(255,255,255,0.12)",
-          borderRadius: ds.radius.pill,
-          padding: "6px 8px",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
+          minWidth: 180,
+          background: "#1e2027",
+          border: "0.5px solid rgba(255,255,255,0.1)",
+          borderRadius: 14,
+          padding: "6px",
+          boxShadow: "0 12px 48px rgba(0,0,0,0.5)",
+          overflow: "hidden",
         }}
       >
-        {actions.map((a) => (
+        {items.map((a) => (
           <button
             key={a.label}
-            title={a.label}
-            onClick={(e) => { e.stopPropagation(); a.cb(); onClose(); }}
+            onClick={(e) => { e.stopPropagation(); a.handler(); onClose(); }}
             style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 32, height: 32, borderRadius: "50%",
-              background: "transparent", border: "none", cursor: "pointer",
-              color: a.danger ? ds.destructive : ds.textMuted,
-              transition: "background 0.15s, color 0.15s",
+              display: "flex", alignItems: "center", gap: 10,
+              width: "100%", padding: "9px 12px",
+              background: "transparent", border: "none", borderRadius: 10,
+              color: a.danger ? ds.destructive : ds.text,
+              fontSize: 14, cursor: "pointer",
+              fontFamily: ds.font.body,
+              transition: "background 0.1s",
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = a.danger ? ds.destructiveDim : ds.surfaceHover;
-              e.currentTarget.style.color = a.danger ? ds.destructive : ds.text;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent";
-              e.currentTarget.style.color = a.danger ? ds.destructive : ds.textMuted;
-            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = a.danger ? "rgba(239,68,68,0.12)" : "rgba(255,255,255,0.06)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
           >
             {a.icon}
+            <span>{a.label}</span>
           </button>
         ))}
       </motion.div>
     </>
+  );
+}
+
+/* ─── Mobile action sheet (long-press) ─── */
+function MobileActionSheet({ isOwn, onCopy, onDelete, onClose }) {
+  const items = [
+    { icon: <Copy size={17} />, label: "Copy", handler: onCopy },
+    isOwn && { icon: <Trash2 size={17} />, label: "Delete", handler: onDelete, danger: true },
+  ].filter(Boolean);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{
+        position: "fixed", inset: 0, zIndex: 50,
+        background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
+        display: "flex", flexDirection: "column", justifyContent: "flex-end",
+      }}
+      onClick={onClose}
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
+    >
+      <motion.div
+        initial={{ y: 60, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 60, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 340, damping: 30 }}
+        onClick={(e) => e.stopPropagation()}
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
+          style={{
+            background: "#1a1c22",
+            borderTop: "0.5px solid rgba(255,255,255,0.1)",
+            borderRadius: "16px 16px 0 0",
+            padding: "20px 16px 40px",
+          }}
+      >
+        <div style={{
+          width: 36, height: 4, borderRadius: 2,
+          background: "rgba(255,255,255,0.15)",
+          margin: "-8px auto 20px",
+        }} />
+        {items.map((a) => (
+          <button
+            key={a.label}
+            onClick={(e) => { e.stopPropagation(); a.handler(); onClose(); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 14,
+              width: "100%", padding: "14px",
+              background: "rgba(255,255,255,0.04)",
+              border: "0.5px solid rgba(255,255,255,0.06)",
+              borderRadius: 12,
+              color: a.danger ? ds.destructive : ds.text,
+              fontSize: 15, cursor: "pointer",
+              fontFamily: ds.font.body,
+              marginBottom: 8,
+              transition: "background 0.12s",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            {a.icon}
+            <span>{a.label}</span>
+          </button>
+        ))}
+        <button
+          onClick={onClose}
+          style={{
+            width: "100%", padding: "14px",
+            background: "rgba(255,255,255,0.05)",
+            border: "0.5px solid rgba(255,255,255,0.1)",
+            borderRadius: 12,
+            color: ds.text, fontSize: 15,
+            cursor: "pointer", fontFamily: ds.font.body,
+            marginTop: 4,
+          }}
+        >
+          Cancel
+        </button>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -263,7 +341,8 @@ const MessageBubble = memo(function MessageBubble({
   decryptMessage, decryptAttachment,
   onDelete, onDeleteForever,
 }) {
-  const [showActions, setShowActions] = useState(false);
+  const [showContextMenu, setShowContextMenu] = useState(false);
+  const [showActionSheet, setShowActionSheet] = useState(false);
   const [showDeleteOptions, setShowDeleteOptions] = useState(false);
   const [decryptedBody, setDecryptedBody] = useState(null);
   const [replyPreview, setReplyPreview] = useState(null);
@@ -280,15 +359,15 @@ const MessageBubble = memo(function MessageBubble({
 
   /* Long-press / context menu */
   const touchStartRef = useRef(null);
-  function openActions(e) {
+  function openContextMenu(e) {
     e?.preventDefault?.();
     if (isDeleted) return;
-    setShowActions(true);
+    setShowContextMenu(true);
   }
   function startLongPress(e) {
     if (isDeleted) return;
     touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    longPressRef.current = setTimeout(() => setShowActions(true), 480);
+    longPressRef.current = setTimeout(() => setShowActionSheet(true), 480);
   }
   function cancelLongPress(e) {
     if (longPressRef.current) {
@@ -302,6 +381,11 @@ const MessageBubble = memo(function MessageBubble({
     }
   }
   useEffect(() => () => cancelLongPress(), []);
+
+  function handleCopy() {
+    const txt = message.encryptedPayload ? (decryptedBody ?? "") : message.body || "";
+    if (txt && navigator.clipboard?.writeText) navigator.clipboard.writeText(txt);
+  }
 
   /* Decrypt body */
   useEffect(() => {
@@ -349,14 +433,15 @@ const MessageBubble = memo(function MessageBubble({
     }
   }, [message.replyTo, decryptMessage, isVisible]);
 
+  const isTemp = typeof message._id === "string" && message._id.startsWith("temp-");
   const rawText = isDeleted ? "" : (message.encryptedPayload ? (decryptedBody ?? "…") : message.body || "");
   const displayText = rawText.startsWith("⚠️") ? null : rawText;
   const time = new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   /* ── Deleted state ── */
-  if (isDeleted && isOwn) {
+  if (isDeleted) {
     return (
-      <div style={{ display: "flex", justifyContent: "flex-end", padding: "1px 0" }}>
+      <div style={{ display: "flex", justifyContent: isOwn ? "flex-end" : "flex-start", padding: "1px 0" }}>
         <div style={{
           fontSize: 13, fontStyle: "italic",
           color: ds.textFaint,
@@ -366,7 +451,7 @@ const MessageBubble = memo(function MessageBubble({
           border: "0.5px solid rgba(255,255,255,0.07)",
           borderRadius: ds.radius.bubble,
         }}>
-          You deleted this message
+          {isOwn ? "You deleted this message" : "This message was deleted"}
         </div>
       </div>
     );
@@ -389,7 +474,7 @@ const MessageBubble = memo(function MessageBubble({
         padding: "1px 0",
         fontFamily: ds.font.body,
       }}
-      onContextMenu={openActions}
+      onContextMenu={openContextMenu}
       onTouchStart={startLongPress}
       onTouchEnd={cancelLongPress}
       onTouchMove={cancelLongPress}
@@ -422,11 +507,12 @@ const MessageBubble = memo(function MessageBubble({
       {/* ── Bubble wrapper (relative for action bar) ── */}
       <div style={{ position: "relative", maxWidth: "min(78%, 380px)" }}>
         <AnimatePresence>
-          {showActions && (
-            <ActionBar
+          {showContextMenu && (
+            <ContextDropdown
               isOwn={isOwn}
-              onDelete={() => { setShowActions(false); setShowDeleteOptions(true); }}
-              onClose={() => setShowActions(false)}
+              onCopy={() => { handleCopy(); setShowContextMenu(false); }}
+              onDelete={() => { setShowContextMenu(false); setShowDeleteOptions(true); }}
+              onClose={() => setShowContextMenu(false)}
             />
           )}
         </AnimatePresence>
@@ -572,7 +658,7 @@ const MessageBubble = memo(function MessageBubble({
             fontSize: 11, letterSpacing: "0.01em",
           }}>
             <span>{time}</span>
-            {isOwn && <ReadStatus delivered={message.delivered} read={message.read} />}
+            {isOwn && <ReadStatus delivered={message.delivered} read={message.read} sending={isTemp} />}
           </div>
         </div>
       </div>
@@ -593,6 +679,17 @@ const MessageBubble = memo(function MessageBubble({
           />
         );
       })()}
+
+      {/* ── Action sheet (mobile long-press) ── */}
+      {showActionSheet && createPortal(
+        <MobileActionSheet
+          isOwn={isOwn}
+          onCopy={() => { handleCopy(); setShowActionSheet(false); }}
+          onDelete={() => { setShowActionSheet(false); setShowDeleteOptions(true); }}
+          onClose={() => setShowActionSheet(false)}
+        />,
+        document.body
+      )}
 
       {/* ── Delete options sheet (portal to body) ── */}
       {showDeleteOptions && createPortal(

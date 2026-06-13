@@ -328,15 +328,6 @@ const S = {
   },
 };
 
-/* ─── helpers ────────────────────────────────────────────────────────────── */
-function getInitials(name = "") {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
 /* ─── component ──────────────────────────────────────────────────────────── */
 export default function Chat() {
   const { user, token, friendRequestCount, clearUnreadBadge } = useAuth();
@@ -367,7 +358,8 @@ export default function Chat() {
   const [typingUsers, setTypingUsers] = useState(new Set());
   const [isSending, setIsSending] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);          // ← debounce flag
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   function handleEmojiSelect(emoji) {
@@ -527,7 +519,10 @@ export default function Chat() {
 
   useEffect(() => {
     if (conversationId) {
-      loadMessages(conversationId);
+      setMessagesLoading(true);
+      setMessages([]);
+      setHasMore(true);
+      loadMessages(conversationId).finally(() => setMessagesLoading(false));
       markConversationRead(conversationId);
     }
   }, [conversationId]);
@@ -574,7 +569,12 @@ export default function Chat() {
         }
         return prev;
       });
-      setConversations((p) => p.map((c) => c._id === msg.conversationId ? { ...c, lastMessage: msg } : c));
+      setConversations((p) => {
+        const idx = p.findIndex((c) => c._id === msg.conversationId);
+        if (idx === -1) return p;
+        const updated = { ...p[idx], lastMessage: msg };
+        return [updated, ...p.slice(0, idx), ...p.slice(idx + 1)];
+      });
       if (msg.conversationId !== conversationIdRef.current)
         setUnreadCounts((p) => ({ ...p, [msg.conversationId]: (p[msg.conversationId] || 0) + 1 }));
     };
@@ -621,12 +621,14 @@ export default function Chat() {
     try {
       const data = await api("/conversations", { token });
       setConversations(data.conversations ?? []);
-      const counts = {};
-      for (const c of data.conversations ?? []) {
-        const uc = c.unreadCounts?.[user?.id] || 0;
-        if (uc > 0) counts[c._id] = uc;
-      }
-      setUnreadCounts(counts);
+      setUnreadCounts((prev) => {
+        const merged = { ...prev };
+        for (const c of data.conversations ?? []) {
+          const serverCount = c.unreadCounts?.[user?.id] || 0;
+          if (serverCount > 0 && prev[c._id] !== 0) merged[c._id] = serverCount;
+        }
+        return merged;
+      });
     } catch {} finally { setLoading(false); }
   }
 
@@ -638,9 +640,10 @@ export default function Chat() {
       const qs = params.toString();
       const data = await api(`/messages/${id}${qs ? `?${qs}` : ""}`, { token });
       const msgs = data.messages ?? [];
+      const reversed = [...msgs].reverse();
       setMessages((prev) => {
         const existing = new Set(prev.map((m) => m._id));
-        const merged = [...msgs.filter((m) => !existing.has(m._id)), ...prev];
+        const merged = [...reversed.filter((m) => !existing.has(m._id)), ...prev];
         return merged;
       });
       if (!before) setHasMore(data.hasMore !== false);
@@ -1103,56 +1106,15 @@ export default function Chat() {
               />
             </div>
 
-            {/* Conversation list */}
-            <div style={S.convListWrap}>
-              {loading ? (
-                <div style={{ padding: "24px", textAlign: "center", color: "#555", fontSize: "13px" }}>
-                  Loading…
-                </div>
-              ) : conversations.length === 0 ? (
-                <div style={{ padding: "40px 20px", textAlign: "center", color: "#555", fontSize: "13px" }}>
-                  No conversations yet.<br />
-                  <span style={{ color: "#2563eb", cursor: "pointer" }} onClick={() => setShowSearch(true)}>
-                    Start one
-                  </span>
-                </div>
-              ) : (
-                conversations.map((conv) => {
-                  const peer = conv.participants?.find((p) => p._id !== user?.id) ?? conv.participants?.[0];
-                  const name = peer?.profile?.name || peer?.username || "Unknown";
-                  const initials = getInitials(name);
-                  const isActive = conv._id === conversationId;
-                  const isOnline = onlineUsers.has(peer?._id);
-                  const unread = unreadCounts[conv._id] || 0;
-                  const lastMsg = conv.lastMessage?.body || (conv.lastMessage?.attachments?.length ? "📎 Attachment" : "");
-
-                  return (
-                    <div
-                      key={conv._id}
-                      style={{
-                        ...S.convItem,
-                        background: isActive ? "#1c1c1c" : "transparent",
-                      }}
-                      onClick={() => navigate(`/chat/${conv._id}`)}
-                      onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "#161616"; }}
-                      onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
-                    >
-                      <div style={S.avatar}>
-                        {peer?.profile?.avatarUrl ? (
-                          <img src={peer.profile.avatarUrl} alt={initials} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
-                        ) : initials}
-                        {isOnline && <span style={S.onlineDot} />}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={S.convName}>{name}</p>
-                        {lastMsg && <p style={S.convLast}>{lastMsg}</p>}
-                      </div>
-                      {unread > 0 && <span style={S.unreadBadge}>{unread}</span>}
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            <ConversationList
+              conversations={conversations}
+              activeId={conversationId}
+              currentUserId={user.id}
+              onlineUsers={onlineUsers}
+              unreadCounts={unreadCounts}
+              onSelect={(cid) => navigate(`/chat/${cid}`)}
+              loading={loading}
+            />
           </>
         )}
       </div>
@@ -1190,6 +1152,7 @@ export default function Chat() {
               onLoadOlder={loadOlderMessages}
               hasMore={hasMore}
               loadingMore={loadingMore}
+              initialLoading={messagesLoading}
             />
 
             {/* Typing indicator */}
